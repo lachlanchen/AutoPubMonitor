@@ -15,8 +15,19 @@ import sys
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Import local modules
+# Import config
 sys.path.append(SCRIPT_DIR)
+try:
+    from config import CONFIG, init_system
+except ImportError:
+    print("Error: Cannot import config module.")
+    print("Make sure config.py is in the same directory as this script.")
+    sys.exit(1)
+
+# Re-initialize system to ensure all directories and files exist
+init_system()
+
+# Import local modules
 try:
     from process_video import VideoProcessor
     from selenium.webdriver.chrome.service import Service
@@ -25,20 +36,12 @@ except ImportError as e:
     print("Make sure all required packages are installed.")
     sys.exit(1)
 
-# Paths for the folders and files
-logs_folder_path = os.path.join(SCRIPT_DIR, 'logs')
-home_dir = os.path.expanduser("~")
-autopublish_folder_path = os.path.join(home_dir, 'AutoPublishDATA', 'AutoPublish')
-videos_db_path = os.path.join(SCRIPT_DIR, 'videos_db.csv')
-processed_path = os.path.join(SCRIPT_DIR, 'processed.csv')
-transcription_path = os.path.join(home_dir, 'AutoPublishDATA', 'transcription_data')
-
-# Ensure the logs, videos, and database files exist
-os.makedirs(logs_folder_path, exist_ok=True)
-os.makedirs(autopublish_folder_path, exist_ok=True)
-os.makedirs(transcription_path, exist_ok=True)
-open(videos_db_path, 'a').close()
-open(processed_path, 'a').close()
+# Get paths from config
+logs_folder_path = CONFIG["logs_dir"]
+autopublish_folder_path = CONFIG["auto_publish_dir"]
+videos_db_path = CONFIG["videos_db_path"]
+processed_path = CONFIG["processed_path"]
+transcription_path = CONFIG["transcription_data_dir"]
 
 # Function to read CSV and get a list of filenames
 def read_csv(csv_path):
@@ -63,8 +66,9 @@ def process_and_publish_file(
     use_translation_cache=False,
     use_metadata_cache=False
 ):
-    upload_url = 'http://localhost:8081/upload'
-    process_url = 'http://localhost:8081/video-processing'
+    upload_url = CONFIG["upload_url"]
+    process_url = CONFIG["process_url"]
+    publish_url = CONFIG["publish_url"]
     
     # Create an instance of VideoProcessor and process the video
     print("Processing file...")
@@ -77,7 +81,6 @@ def process_and_publish_file(
 
     if zip_file_path:
         # Send zip file to lazyingart server for publishing
-        publish_url = 'http://lazyingart:8081/publish'
         with open(zip_file_path, 'rb') as f:
             files = {'file': (os.path.basename(zip_file_path), f)}
             data = {
@@ -98,7 +101,7 @@ def process_and_publish_file(
 if __name__ == "__main__":
     # Lock file is now relative to script directory
     lock_file_path = os.path.join(SCRIPT_DIR, "autopub.lock")
-    bash_script_path = os.path.join(SCRIPT_DIR, "autopub.sh")
+    bash_script_path = CONFIG["autopub_sh_path"]
 
     # Check if lock file exists, if not, create it
     if not os.path.exists(lock_file_path):
@@ -121,9 +124,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Determine publishing platforms based on provided arguments
-    # If none of the publish_xxx flags are provided, default to publishing on all platforms
+    # If none of the publish_xxx flags are provided, default to values in config
+    default_platforms = CONFIG["default_publish_platforms"]
+    
     if not any([args.pub_xhs, args.pub_bilibili, args.pub_douyin, args.pub_y2b, args.pub_shipinhao]):
-        publish_xhs = publish_bilibili = publish_douyin = publish_y2b = publish_shipinhao = True
+        publish_xhs = default_platforms["publish_xhs"]
+        publish_bilibili = default_platforms["publish_bilibili"]
+        publish_douyin = default_platforms["publish_douyin"]
+        publish_shipinhao = default_platforms["publish_shipinhao"]
+        publish_y2b = default_platforms["publish_y2b"]
     else:
         publish_xhs = args.pub_xhs
         publish_bilibili = args.pub_bilibili
@@ -155,8 +164,9 @@ if __name__ == "__main__":
     log_filename = f"{current_datetime.strftime('%Y-%m-%d %H-%M-%S')}.txt"
     log_file_path = os.path.join(logs_folder_path, log_filename)
 
-    # Define video file pattern
-    video_file_pattern = re.compile(r'.+\.(mp4|mov|avi|flv|wmv|mkv)$', re.IGNORECASE)
+    # Define video file pattern based on extensions in config
+    extensions = "|".join(CONFIG["video_file_extensions"])
+    video_file_pattern = re.compile(rf'.+\.({extensions})$', re.IGNORECASE)
     
     # Single file mode
     if args.path:
@@ -215,7 +225,3 @@ if __name__ == "__main__":
     # After all tasks are done, remove the lock file
     if os.path.exists(lock_file_path):
         os.remove(lock_file_path)
-
-    # Re-execute the Bash script (commented out in original)
-    # print("Re-executing the Bash script...")
-    # subprocess.run(["bash", bash_script_path])

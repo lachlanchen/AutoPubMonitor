@@ -4,13 +4,29 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Paths and initial setup
-PUBLISH_SCRIPT="${SCRIPT_DIR}/autopub.sh"
-DIRECTORY_TO_OBSERVE="${HOME}/AutoPublishDATA/AutoPublish"
-QUEUE_LIST="${SCRIPT_DIR}/queue_list.txt"
-TEMP_QUEUE="${SCRIPT_DIR}/temp_queue.txt"
-CHECKED_LIST="${SCRIPT_DIR}/checked_list.txt"
-QUEUE_LOCK="${SCRIPT_DIR}/queue.lock"
+# Source configuration file if it exists
+CONFIG_FILE="${SCRIPT_DIR}/autopub_config.sh"
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+else
+    echo "Warning: Configuration file not found at $CONFIG_FILE"
+    echo "Running setup_config.sh to generate configuration..."
+    bash "${SCRIPT_DIR}/setup_config.sh" --export
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        source "$CONFIG_FILE"
+    else
+        echo "Error: Failed to generate configuration. Using default values."
+    fi
+fi
+
+# Paths and initial setup from configuration
+PUBLISH_SCRIPT="${AUTOPUB_AUTOPUB_SH_PATH:-${SCRIPT_DIR}/autopub.sh}"
+DIRECTORY_TO_OBSERVE="${AUTOPUB_AUTO_PUBLISH_DIR:-${HOME}/AutoPublishDATA/AutoPublish}"
+QUEUE_LIST="${AUTOPUB_QUEUE_LIST_PATH:-${SCRIPT_DIR}/queue_list.txt}"
+TEMP_QUEUE="${AUTOPUB_TEMP_QUEUE_PATH:-${SCRIPT_DIR}/temp_queue.txt}"
+CHECKED_LIST="${AUTOPUB_CHECKED_LIST_PATH:-${SCRIPT_DIR}/checked_list.txt}"
+QUEUE_LOCK="${AUTOPUB_QUEUE_LOCK_PATH:-${SCRIPT_DIR}/queue.lock}"
 
 # Function to echo with timestamp
 echo_with_timestamp() {
@@ -102,10 +118,24 @@ monitor_temp_queue() {
     done
 }
 
+# Ensure the directory to observe exists
+if [ ! -d "$DIRECTORY_TO_OBSERVE" ]; then
+    echo_with_timestamp "Creating directory to observe: $DIRECTORY_TO_OBSERVE"
+    mkdir -p "$DIRECTORY_TO_OBSERVE"
+fi
+
 # Start background monitoring of temp queue
 monitor_temp_queue &
 
 # Use inotifywait to monitor the directory for changes
+echo_with_timestamp "Starting inotifywait monitoring on: $DIRECTORY_TO_OBSERVE"
+
+# Check if inotifywait is installed
+if ! command -v inotifywait &> /dev/null; then
+    echo_with_timestamp "Error: inotifywait not found. Please install inotify-tools package."
+    exit 1
+fi
+
 inotifywait -m -e close_write -e moved_to "$DIRECTORY_TO_OBSERVE" |
 while read -r directory events filename; do
     if [[ "$filename" =~ ^\..*\..*\..*$ ]]; then

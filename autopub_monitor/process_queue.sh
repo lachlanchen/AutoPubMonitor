@@ -4,11 +4,27 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Define variables
-QUEUE_LIST="${SCRIPT_DIR}/queue_list.txt"
-LOG_DIR="${SCRIPT_DIR}/logs-autopub"
-PUBLISH_SCRIPT="${SCRIPT_DIR}/autopub.sh"
-QUEUE_LOCK="${SCRIPT_DIR}/queue.lock"
+# Source configuration file if it exists
+CONFIG_FILE="${SCRIPT_DIR}/autopub_config.sh"
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+else
+    echo "Warning: Configuration file not found at $CONFIG_FILE"
+    echo "Running setup_config.sh to generate configuration..."
+    bash "${SCRIPT_DIR}/setup_config.sh" --export
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        source "$CONFIG_FILE"
+    else
+        echo "Error: Failed to generate configuration. Using default values."
+    fi
+fi
+
+# Define variables from configuration or use defaults
+QUEUE_LIST="${AUTOPUB_QUEUE_LIST_PATH:-${SCRIPT_DIR}/queue_list.txt}"
+LOG_DIR="${AUTOPUB_LOGS_AUTOPUB_DIR:-${SCRIPT_DIR}/logs-autopub}"
+PUBLISH_SCRIPT="${AUTOPUB_AUTOPUB_SH_PATH:-${SCRIPT_DIR}/autopub.sh}"
+QUEUE_LOCK="${AUTOPUB_QUEUE_LOCK_PATH:-${SCRIPT_DIR}/queue.lock}"
 
 # Function to echo with timestamp
 echo_with_timestamp() {
@@ -57,6 +73,7 @@ while true; do
         
         rm "$TMP_FILE"
     else
+        # Uncomment this line for more verbose logging
         # echo_with_timestamp "No valid file to process. Waiting for new files in the queue..."
         sleep 1
     fi

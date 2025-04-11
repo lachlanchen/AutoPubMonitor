@@ -4,12 +4,28 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source configuration file if it exists
+CONFIG_FILE="${SCRIPT_DIR}/autopub_config.sh"
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+else
+    echo "Warning: Configuration file not found at $CONFIG_FILE"
+    echo "Running setup_config.sh to generate configuration..."
+    bash "${SCRIPT_DIR}/setup_config.sh" --export
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        source "$CONFIG_FILE"
+    else
+        echo "Error: Failed to generate configuration. Using default values."
+    fi
+fi
+
 # Try to load the user's bash profile to ensure all environment variables are set
 source ~/.bashrc 2>/dev/null || source ~/.profile 2>/dev/null || true
 
 # Try to activate Conda environment if available
-CONDA_PATH="${HOME}/miniconda3/bin/activate"
-CONDA_ENV="autopub-video"
+CONDA_PATH="${AUTOPUB_CONDA_PATH:-${HOME}/miniconda3/bin/activate}"
+CONDA_ENV="${AUTOPUB_CONDA_ENV:-autopub-video}"
 
 if [ -f "$CONDA_PATH" ]; then
     source "$CONDA_PATH" "$CONDA_ENV" || echo "Warning: Could not activate conda environment $CONDA_ENV"
@@ -29,7 +45,7 @@ echo_with_timestamp "Executing autopub.py with file: ${full_path}..."
 
 # Define the lock file and log file
 lock_file="${SCRIPT_DIR}/autopub.lock"
-log_dir="${SCRIPT_DIR}/logs-autopub"
+log_dir="${AUTOPUB_LOGS_AUTOPUB_DIR:-${SCRIPT_DIR}/logs-autopub}"
 log_file="${log_dir}/autopub_$(date '+%Y-%m-%d_%H-%M-%S').log"
 
 # Create log directory if it doesn't exist

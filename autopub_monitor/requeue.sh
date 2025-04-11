@@ -1,14 +1,28 @@
-
-
 #!/bin/bash
 # requeue.sh - Requeue files for processing
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Directory to observe (data path remains unchanged)
-OBSERVE_DIR="${HOME}/AutoPublishDATA/AutoPublish"
-QUEUE_PIPE="${SCRIPT_DIR}/queue.pipe"
+# Source configuration file if it exists
+CONFIG_FILE="${SCRIPT_DIR}/autopub_config.sh"
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+else
+    echo "Warning: Configuration file not found at $CONFIG_FILE"
+    echo "Running setup_config.sh to generate configuration..."
+    bash "${SCRIPT_DIR}/setup_config.sh" --export
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        source "$CONFIG_FILE"
+    else
+        echo "Error: Failed to generate configuration. Using default values."
+    fi
+fi
+
+# Directory to observe and queue pipe from config or use defaults
+OBSERVE_DIR="${AUTOPUB_AUTO_PUBLISH_DIR:-${HOME}/AutoPublishDATA/AutoPublish}"
+QUEUE_PIPE="${AUTOPUB_QUEUE_PIPE_PATH:-${SCRIPT_DIR}/queue.pipe}"
 
 # Confirmation flag
 SKIP_CONFIRMATION=false
