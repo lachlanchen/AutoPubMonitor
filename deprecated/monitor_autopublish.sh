@@ -1,23 +1,31 @@
 #!/bin/bash
+# monitor_autopublish.sh - Monitors directory for new video files
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Paths and initial setup
-PUBLISH_SCRIPT="/home/lachlan/Projects/autopub_monitor/autopub.sh"
-DIRECTORY_TO_OBSERVE="/home/lachlan/AutoPublishDATA/AutoPublish"
-QUEUE_LIST="/home/lachlan/Projects/autopub_monitor/queue_list.txt"
-TEMP_QUEUE="/home/lachlan/Projects/autopub_monitor/temp_queue.txt"
-CHECKED_LIST="/home/lachlan/Projects/autopub_monitor/checked_list.txt"
-QUEUE_LOCK="/home/lachlan/Projects/autopub_monitor/queue.lock"
+PUBLISH_SCRIPT="${SCRIPT_DIR}/autopub.sh"
+DIRECTORY_TO_OBSERVE="${HOME}/AutoPublishDATA/AutoPublish"
+QUEUE_LIST="${SCRIPT_DIR}/queue_list.txt"
+TEMP_QUEUE="${SCRIPT_DIR}/temp_queue.txt"
+CHECKED_LIST="${SCRIPT_DIR}/checked_list.txt"
+QUEUE_LOCK="${SCRIPT_DIR}/queue.lock"
 
+# Function to echo with timestamp
 echo_with_timestamp() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
 }
 
 echo_with_timestamp "Watching directory: $DIRECTORY_TO_OBSERVE for new files or files moved here."
+
+# Ensure necessary files exist
 touch "${QUEUE_LIST}"
 touch "${TEMP_QUEUE}"
 touch "${CHECKED_LIST}"
 touch "${QUEUE_LOCK}"
 
+# Check and queue file function
 check_and_queue_file() {
     local full_path=$1
 
@@ -37,6 +45,7 @@ check_and_queue_file() {
     fi
 }
 
+# Queue file function
 queue_file() {
     local file_path=$1
     local sleep_time=$(( RANDOM % 30 + 1 ))  # Random sleep between 1 and 30 seconds
@@ -50,6 +59,7 @@ queue_file() {
     ) 200>"$QUEUE_LOCK"
 }
 
+# Handle potential conflict file function
 handle_potential_conflict_file() {
     local original_file_path=$1
     local directory=$(dirname -- "$original_file_path")
@@ -72,7 +82,7 @@ handle_potential_conflict_file() {
     echo "$original_file_path" >> "$TEMP_QUEUE"
 }
 
-
+# Function to monitor temp queue
 monitor_temp_queue() {
     while true; do
         if [ ! -s "$TEMP_QUEUE" ]; then
@@ -92,8 +102,10 @@ monitor_temp_queue() {
     done
 }
 
+# Start background monitoring of temp queue
 monitor_temp_queue &
 
+# Use inotifywait to monitor the directory for changes
 inotifywait -m -e close_write -e moved_to "$DIRECTORY_TO_OBSERVE" |
 while read -r directory events filename; do
     if [[ "$filename" =~ ^\..*\..*\..*$ ]]; then

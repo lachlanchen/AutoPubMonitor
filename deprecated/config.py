@@ -1,18 +1,10 @@
-sudo cat > /tmp/config_update.py << 'EOF'
 #!/usr/bin/env python3
 # config.py - Central configuration for AutoPubMonitor system
 
 import os
 import json
-import sys
 from pathlib import Path
 import getpass
-
-# Check for export argument
-if len(sys.argv) > 1 and sys.argv[1] == '--export':
-    EXPORT_MODE = True
-else:
-    EXPORT_MODE = False
 
 # Base directories - Get current user even when running with sudo
 try:
@@ -216,11 +208,7 @@ def init_system():
     create_required_directories(config)
     create_required_files(config)
     create_named_pipe(config)
-    
-    # Export configuration if in export mode
-    if EXPORT_MODE:
-        export_bash_config(config)
-        
+    export_bash_config(config)
     return config
 
 # Get configuration
@@ -229,18 +217,11 @@ CONFIG = load_config()
 if __name__ == "__main__":
     # If run directly, initialize the system
     config = init_system()
-    
-    if not EXPORT_MODE:
-        print("System initialized with configuration:")
-        for key, value in config.items():
-            if not isinstance(value, dict):
-                print(f"  {key}: {value}")
-            else:
-                print(f"  {key}:")
-                for sub_key, sub_value in value.items():
-                    print(f"    {sub_key}: {sub_value}")
-EOF
-
-sudo mv /tmp/config_update.py ${PWD}/config.py
-sudo chmod +x ${PWD}/config.py
-sudo chown $(whoami):$(whoami) ${PWD}/config.py
+    print("System initialized with configuration:")
+    for key, value in config.items():
+        if not isinstance(value, dict):
+            print(f"  {key}: {value}")
+        else:
+            print(f"  {key}:")
+            for sub_key, sub_value in value.items():
+                print(f"    {sub_key}: {sub_value}")

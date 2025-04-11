@@ -1,10 +1,14 @@
 #!/bin/bash
+# process_queue.sh - Processes files from the queue
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Define variables
-QUEUE_LIST="/home/lachlan/Projects/autopub_monitor/queue_list.txt"
-LOG_DIR="/home/lachlan/Projects/autopub_monitor/logs-autopub"
-PUBLISH_SCRIPT="/home/lachlan/Projects/autopub_monitor/autopub.sh"
-QUEUE_LOCK="/home/lachlan/Projects/autopub_monitor/queue.lock"
+QUEUE_LIST="${SCRIPT_DIR}/queue_list.txt"
+LOG_DIR="${SCRIPT_DIR}/logs-autopub"
+PUBLISH_SCRIPT="${SCRIPT_DIR}/autopub.sh"
+QUEUE_LOCK="${SCRIPT_DIR}/queue.lock"
 
 # Function to echo with timestamp
 echo_with_timestamp() {
@@ -56,5 +60,4 @@ while true; do
         # echo_with_timestamp "No valid file to process. Waiting for new files in the queue..."
         sleep 1
     fi
-
 done

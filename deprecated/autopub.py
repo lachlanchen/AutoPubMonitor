@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# autopub.py - Video processing and publishing system
+
 import os
 import csv
 import re
@@ -6,17 +9,29 @@ import argparse
 import requests
 from datetime import datetime
 from pathlib import Path
-from process_video import VideoProcessor
-from selenium.webdriver.chrome.service import Service
-
 import subprocess
+import sys
+
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Import local modules
+sys.path.append(SCRIPT_DIR)
+try:
+    from process_video import VideoProcessor
+    from selenium.webdriver.chrome.service import Service
+except ImportError as e:
+    print(f"Error importing required modules: {e}")
+    print("Make sure all required packages are installed.")
+    sys.exit(1)
 
 # Paths for the folders and files
-logs_folder_path = '/home/lachlan/ProjectsLFS/autopub_monitor/logs'
-autopublish_folder_path = '/home/lachlan/AutoPublishDATA/AutoPublish'
-videos_db_path = '/home/lachlan/ProjectsLFS/autopub_monitor/videos_db.csv'
-processed_path = '/home/lachlan/ProjectsLFS/autopub_monitor/processed.csv'
-transcription_path = "/home/lachlan/AutoPublishDATA/transcription_data"
+logs_folder_path = os.path.join(SCRIPT_DIR, 'logs')
+home_dir = os.path.expanduser("~")
+autopublish_folder_path = os.path.join(home_dir, 'AutoPublishDATA', 'AutoPublish')
+videos_db_path = os.path.join(SCRIPT_DIR, 'videos_db.csv')
+processed_path = os.path.join(SCRIPT_DIR, 'processed.csv')
+transcription_path = os.path.join(home_dir, 'AutoPublishDATA', 'transcription_data')
 
 # Ensure the logs, videos, and database files exist
 os.makedirs(logs_folder_path, exist_ok=True)
@@ -81,14 +96,13 @@ def process_and_publish_file(
         print(f"Failed to process video: {file_path}")
 
 if __name__ == "__main__":
-
-    lock_file_path = "/home/lachlan/Projects/autopub_monitor/autopub.lock"
-    bash_script_path = "/home/lachlan/Projects/autopub_monitor/autopub.sh"
+    # Lock file is now relative to script directory
+    lock_file_path = os.path.join(SCRIPT_DIR, "autopub.lock")
+    bash_script_path = os.path.join(SCRIPT_DIR, "autopub.sh")
 
     # Check if lock file exists, if not, create it
     if not os.path.exists(lock_file_path):
         open(lock_file_path, 'a').close()
-
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
@@ -97,7 +111,7 @@ if __name__ == "__main__":
     parser.add_argument('--pub-douyin', action='store_true', help="Publish on DouYin")
     parser.add_argument('--pub-shipinhao', action='store_true', help="Publish on ShiPinHao")
     parser.add_argument('--pub-y2b', action='store_true', help="Publish on YouTube")
-    parser.add_argument('--no-pub', action='store_true', help="Publish on YouTube")
+    parser.add_argument('--no-pub', action='store_true', help="Don't publish anywhere")
     parser.add_argument('--test', action='store_true', help="Run in test mode")
     parser.add_argument('--use-cache', action='store_true', help="Use cache")
     parser.add_argument('--use-translation-cache', action='store_true', help="Use translation cache")
@@ -124,25 +138,18 @@ if __name__ == "__main__":
         publish_shipinhao = False
         publish_y2b = False
 
-
-
-    # Determine publishing platforms based on provided arguments
-    # publish_xhs = args.pub_xhs
-    # publish_bilibili = args.pub_bilibili
-    # publish_douyin = args.pub_douyin
     test_mode = args.test
     use_cache = args.use_cache
     force_filename = args.force
+    
     if not (force_filename is None):
         force_filename = force_filename.strip()
     else:
         force_filename = ""
+    
     force_files = force_filename.split(",")
-
     use_translation_cache = args.use_translation_cache
     use_metadata_cache = args.use_metadata_cache
-
-
 
     current_datetime = datetime.now()
     log_filename = f"{current_datetime.strftime('%Y-%m-%d %H-%M-%S')}.txt"
@@ -151,7 +158,6 @@ if __name__ == "__main__":
     # Define video file pattern
     video_file_pattern = re.compile(r'.+\.(mp4|mov|avi|flv|wmv|mkv)$', re.IGNORECASE)
     
-
     # Single file mode
     if args.path:
         filename = os.path.basename(args.path)
@@ -189,9 +195,8 @@ if __name__ == "__main__":
                     
                     processed_files = read_csv(processed_path)
                     # If not processed, process the file and update processed.csv
-                    # if (filename not in processed_files) or (force_filename != "" and force_filename in filename):
-                    # if (force_filename and force_filename in filename) or (not force_filename and filename not in processed_files):
-                    if ( (force_files and any(force_file.strip() in filename for force_file in force_files)) or ( filename and filename in force_files)) or (not force_filename and filename not in processed_files):
+                    if ((force_files and any(force_file.strip() in filename for force_file in force_files)) or 
+                        (filename and filename in force_files)) or (not force_filename and filename not in processed_files):
                         print("process and publish file: ", file_path)
                         process_and_publish_file(
                             file_path,
@@ -207,10 +212,10 @@ if __name__ == "__main__":
                         )
                         update_csv_if_new(filename, processed_path)
 
-# After all tasks are done, remove the lock file
-if os.path.exists(lock_file_path):
-    os.remove(lock_file_path)
+    # After all tasks are done, remove the lock file
+    if os.path.exists(lock_file_path):
+        os.remove(lock_file_path)
 
-# Re-execute the Bash script
-# print("Re-executing the Bash script...")
-# subprocess.run(["bash", bash_script_path])
+    # Re-execute the Bash script (commented out in original)
+    # print("Re-executing the Bash script...")
+    # subprocess.run(["bash", bash_script_path])

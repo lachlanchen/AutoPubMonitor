@@ -82,11 +82,11 @@ create_virtualenv() {
     sudo -u "$ACTUAL_USER" bash -c "source ${VENV_DIR}/bin/activate && pip install requests requests-toolbelt selenium"
     
     # Create activation script for the services
-    cat > "${SCRIPT_DIR}/activate_venv.sh" << VENVEOF
+    cat > "${SCRIPT_DIR}/activate_venv.sh" << EOF
 #!/bin/bash
 # Source this file to activate the virtual environment
 source "${VENV_DIR}/bin/activate"
-VENVEOF
+EOF
     
     chmod +x "${SCRIPT_DIR}/activate_venv.sh"
     chown "$ACTUAL_USER":"$ACTUAL_USER" "${SCRIPT_DIR}/activate_venv.sh"
@@ -157,7 +157,7 @@ create_empty_files() {
             log "File already exists: $file"
         fi
         chown "$ACTUAL_USER":"$ACTUAL_USER" "${SCRIPT_DIR}/$file"
-    done
+    fi
 }
 
 # Update config.py with correct user home path
@@ -183,7 +183,7 @@ install_service() {
     
     log "Creating systemd service file: $service_path"
     
-    cat > "$service_path" << SERVICEEOF
+    cat > "$service_path" << EOF
 [Unit]
 Description=AutoPublish Monitoring and Queue Processing
 Wants=network-online.target
@@ -199,7 +199,7 @@ RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
-SERVICEEOF
+EOF
     
     log "Reloading systemd daemon"
     systemctl daemon-reload
@@ -262,105 +262,10 @@ install_dependencies() {
     create_virtualenv
 }
 
-# Run initial configuration as the actual user - DIRECT PYTHON APPROACH
+# Run initial configuration as the actual user
 run_initial_config() {
     log "Running initial configuration setup as user $ACTUAL_USER..."
-    
-    # Create the initialization Python script
-    cat > "${SCRIPT_DIR}/init_config.py" << PYEOF
-#!/usr/bin/env python3
-import os
-import sys
-import json
-
-def init_system():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, script_dir)
-    
-    try:
-        # Import the config module
-        from config import CONFIG
-        
-        # Create required directories
-        directories = [
-            CONFIG["data_dir"],
-            CONFIG["auto_publish_dir"],
-            CONFIG["transcription_data_dir"],
-            CONFIG["logs_dir"],
-            CONFIG["logs_autopub_dir"]
-        ]
-        
-        for directory in directories:
-            os.makedirs(directory, exist_ok=True)
-            print(f"Created or verified directory: {directory}")
-        
-        # Create empty files if they don't exist
-        files = [
-            CONFIG["videos_db_path"],
-            CONFIG["processed_path"],
-            CONFIG["queue_list_path"],
-            CONFIG["temp_queue_path"],
-            CONFIG["checked_list_path"],
-            CONFIG["queue_lock_path"]
-        ]
-        
-        for file_path in files:
-            if not os.path.exists(file_path):
-                with open(file_path, 'a') as f:
-                    pass  # Just create an empty file
-                print(f"Created empty file: {file_path}")
-        
-        # Export config to bash format
-        export_bash_config(CONFIG)
-        
-        print("System initialized successfully.")
-        return 0
-    except Exception as e:
-        print(f"Error initializing system: {e}")
-        return 1
-
-def export_bash_config(config):
-    """Export configuration to bash format for shell scripts"""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    output_path = os.path.join(script_dir, "autopub_config.sh")
-    
-    lines = ["#!/bin/bash", "# AutoPubMonitor configuration", ""]
-    
-    # Add activation of virtual environment if it exists
-    venv_script = os.path.join(script_dir, "activate_venv.sh")
-    if os.path.exists(venv_script):
-        lines.append(f"# Source virtual environment")
-        lines.append(f"if [ -f \"{venv_script}\" ]; then")
-        lines.append(f"    source \"{venv_script}\"")
-        lines.append(f"fi")
-        lines.append("")
-    
-    for key, value in config.items():
-        # Handle nested dictionaries
-        if isinstance(value, dict):
-            for sub_key, sub_value in value.items():
-                lines.append(f'export AUTOPUB_{key.upper()}_{sub_key.upper()}="{str(sub_value)}"')
-        # Handle strings, numbers, and booleans
-        else:
-            lines.append(f'export AUTOPUB_{key.upper()}="{str(value)}"')
-    
-    with open(output_path, 'w') as f:
-        f.write('\\n'.join(lines))
-    
-    # Make the file executable
-    os.chmod(output_path, 0o755)
-    print(f"Exported bash configuration to: {output_path}")
-
-if __name__ == "__main__":
-    sys.exit(init_system())
-PYEOF
-
-    # Make the script executable and set ownership
-    chmod +x "${SCRIPT_DIR}/init_config.py"
-    chown "$ACTUAL_USER":"$ACTUAL_USER" "${SCRIPT_DIR}/init_config.py"
-    
-    # Run the initialization script as the actual user
-    sudo -u "$ACTUAL_USER" bash -c "cd ${SCRIPT_DIR} && source ./activate_venv.sh && python3 ./init_config.py"
+    sudo -u "$ACTUAL_USER" bash -c "cd ${SCRIPT_DIR} && source ./activate_venv.sh && python3 ./setup_config.sh --initialize --export"
     
     # Ensure config files are owned by the actual user
     if [ -f "${SCRIPT_DIR}/autopub_config.json" ]; then

@@ -60,17 +60,8 @@ export_config() {
     check_python
     
     echo "Exporting configuration to bash..."
-    python3 -c "
-import sys
-sys.path.insert(0, '${SCRIPT_DIR}')
-try:
-    from config import CONFIG, export_bash_config
-    export_bash_config(CONFIG)
-    print('Configuration exported successfully.')
-except Exception as e:
-    print(f'Error exporting configuration: {e}')
-    sys.exit(1)
-"
+    # Export configuration using Python directly
+    python3 "${SCRIPT_DIR}/config.py" --export
 }
 
 # Process command line arguments
