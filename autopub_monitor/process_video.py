@@ -1,26 +1,17 @@
 #!/usr/bin/env python3
-# process_video.py - Video processing client
+# process_video.py - Video processing utilities for AutoPub Monitor
 
 import os
 import requests
-import tempfile
-import subprocess
-import sys
-import shutil
+from urllib.parse import urlparse
 from pathlib import Path
 from requests_toolbelt import MultipartEncoder
-
-# Get the directory where this script is located
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Import config
-sys.path.append(SCRIPT_DIR)
-try:
-    from config import CONFIG
-except ImportError:
-    print("Error: Cannot import config module.")
-    print("Make sure config.py is in the same directory as this script.")
-    sys.exit(1)
+import subprocess
+import tempfile
+import shutil
+import numpy as np
+from tqdm import tqdm
+import json
 
 def get_video_length(filename):
     """Returns the length of the video in seconds or None if unable to determine."""
@@ -44,6 +35,7 @@ def augment_video(video_path, augmented_length, output_path):
         output_path (str): Path to the output augmented video.
     """
     try:
+        # Get the length of the input video
         video_length = get_video_length(video_path)
 
         if video_length >= augmented_length:
@@ -68,8 +60,28 @@ def augment_video(video_path, augmented_length, output_path):
             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", output_path
         ]
         print(f"Executing FFmpeg command: {' '.join(ffmpeg_command)}")
-        subprocess.run(ffmpeg_command, check=True)
-
+        
+        # Use tqdm to show progress
+        process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+        
+        # Create progress bar for the augmentation process
+        with tqdm(total=100, desc="Augmenting video", unit="%") as pbar:
+            for line in process.stdout:
+                if 'time=' in line:
+                    # Extract progress from ffmpeg output
+                    try:
+                        time_str = line.split('time=')[1].split()[0]
+                        h, m, s = time_str.split(':')
+                        current_time = float(h) * 3600 + float(m) * 60 + float(s)
+                        progress = min(100, int(100 * current_time / (video_length * repeat_count)))
+                        pbar.update(progress - pbar.n)  # Update to current progress
+                    except:
+                        pass
+            
+            # Ensure we reach 100% in the progress bar
+            pbar.update(100 - pbar.n)
+            
+        process.wait()
         print(f"Video successfully augmented and saved to {output_path}")
     except subprocess.CalledProcessError as e:
         print(f"Error during video augmentation: {e}")
@@ -91,14 +103,14 @@ class VideoProcessor:
         os.makedirs(self.transcription_path, exist_ok=True)
 
         input_file = self.video_path
-        # Get minimum video length from config
-        augmented_length = CONFIG["min_video_length"]
+        # Define the minimum length for the video in seconds
+        augmented_length = 7  # 7 seconds
         threshold_length = augmented_length
 
         # Attempt to check the video length
         video_length = get_video_length(input_file)
         
-        print("video length: ", video_length)
+        print("Video length:", video_length)
 
         # Skip augmentation if the video length is greater than augmented_length or if it couldn't be determined
         if video_length is None or video_length > threshold_length:
@@ -108,20 +120,20 @@ class VideoProcessor:
                 print(f"Video is longer than {augmented_length} seconds, skipping augmentation.")
         else:
             # Proceed with augmentation if the video is shorter than the augmented_length
-            print(f"Video length {video_length} is shorter than {threshold_length}. Augmented to {augmented_length}. ")
+            print(f"Video length {video_length} is shorter than {threshold_length}. Augmenting to {augmented_length}s.")
             input_file = self.augment_video_if_needed(input_file, augmented_length)
 
         self.video_path = input_file
 
     def augment_video_if_needed(self, input_file, augmented_length):
-        print("input_file: ", input_file)
+        print("Input file:", input_file)
 
         base_name, extension = os.path.splitext(os.path.basename(input_file))
         # Using tempfile to create a temporary directory
         temp_dir = tempfile.mkdtemp()
         augmented_video_path = os.path.join(temp_dir, f"{base_name}_augmented_{augmented_length}s{extension}")
 
-        print("augmented_video_path: ", augmented_video_path)
+        print("Augmented video path:", augmented_video_path)
 
         # Perform the augmentation
         new_path = augment_video(input_file, augmented_length, augmented_video_path)
@@ -143,11 +155,12 @@ class VideoProcessor:
             return zip_file_path
         else:
             if not os.path.isfile(zip_file_path):
-                print(f"{zip_file_path} not found. ")
+                print(f"{zip_file_path} not found.")
                 print("Cache miss. Uploading video for processing.")
             else:
                 print("Cache ignored: use_cache=false.")
-            
+        
+        # Upload the video file
         if not self.upload_url.endswith("stream"):
             with open(self.video_path, 'rb') as f:
                 files = {'video': (os.path.basename(self.video_path), f)}
@@ -186,10 +199,43 @@ class VideoProcessor:
                 "use_metadata_cache": use_metadata_cache
             }
         )
+        
         if process_response.ok:
-            with open(zip_file_path, 'wb') as f:
-                f.write(process_response.content)
+            # Save the processing results with progress bar
+            content_length = int(process_response.headers.get('content-length', 0))
+            
+            with open(zip_file_path, 'wb') as f, tqdm(
+                desc=f"Downloading processed files",
+                total=content_length,
+                unit='B',
+                unit_scale=True,
+                unit_divisor=1024,
+            ) as pbar:
+                for chunk in process_response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        pbar.update(len(chunk))
+            
             print(f'Success! Processed files are downloaded and saved to {zip_file_path}.')
+            
+            # Save the data alongside the figure/results
+            data_file_path = os.path.join(zip_file_root, f"{video_name}_data.json")
+            try:
+                data = {
+                    "processed_date": str(datetime.now()),
+                    "video_path": self.video_path,
+                    "video_name": video_name,
+                    "processing_options": {
+                        "use_cache": use_cache,
+                        "use_translation_cache": use_translation_cache,
+                        "use_metadata_cache": use_metadata_cache
+                    }
+                }
+                with open(data_file_path, 'w') as f:
+                    json.dump(data, f, indent=4)
+            except:
+                print("Unable to save processing data file.")
+                
             return zip_file_path
         else:
             print(f'Failed to process file. Status code: {process_response.status_code}, Message: {process_response.text}')
@@ -206,13 +252,19 @@ class VideoProcessor:
             return file_path  # Return original file path in case of failure
         return output_file_path
 
-
 if __name__ == "__main__":
-    # Usage example
-    video_path = os.path.join(os.path.expanduser("~"), 'AutoPublishDATA', 'AutoPublish', 'example.mp4')
-    upload_url = CONFIG["upload_url"]
-    process_url = CONFIG["process_url"]
-    transcription_path = CONFIG["transcription_data_dir"]
+    # Set random seed
+    np.random.seed(23)
+    
+    # Example usage
+    video_path = '/path/to/your/video.mp4'
+    server_url = 'http://localhost:8081/video-processing'
+    transcription_path = "/path/to/transcription_data"
 
-    processor = VideoProcessor(upload_url, process_url, video_path, transcription_path)
+    processor = VideoProcessor(
+        upload_url='http://localhost:8081/upload',
+        process_url=server_url,
+        video_path=video_path, 
+        transcription_path=transcription_path
+    )
     processor.process_video(use_cache=True)

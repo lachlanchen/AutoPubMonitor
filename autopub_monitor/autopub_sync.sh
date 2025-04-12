@@ -1,38 +1,15 @@
 #!/bin/bash
-# autopub_sync.sh - Synchronizes video files from source to destination
+# autopub_sync.sh - Synchronize files between directories
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Source the config file
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+source "${SCRIPT_DIR}/autopub.config"
 
-# Source configuration file if it exists
-CONFIG_FILE="${SCRIPT_DIR}/autopub_config.sh"
-if [ -f "$CONFIG_FILE" ]; then
-    source "$CONFIG_FILE"
-else
-    echo "Warning: Configuration file not found at $CONFIG_FILE"
-    echo "Running setup_config.sh to generate configuration..."
-    bash "${SCRIPT_DIR}/setup_config.sh" --export
-    
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
-    else
-        echo "Error: Failed to generate configuration. Using default values."
-    fi
-fi
+echo_with_timestamp() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
+}
 
-# Define source and destination from config or use defaults
-src="${AUTOPUB_SYNC_SOURCE:-${HOME}/jianguoyun/AutoPublishDATA/AutoPublish/}"
-dst="${AUTOPUB_SYNC_TARGET:-${HOME}/AutoPublishDATA/AutoPublish/}"
-sync_interval="${AUTOPUB_SYNC_INTERVAL:-10}"
-
-echo "Starting AutoPublish sync service"
-echo "Source directory: $src"
-echo "Destination directory: $dst"
-echo "Sync interval: $sync_interval seconds"
-
-# Ensure source and destination directories exist
-mkdir -p "$src"
-mkdir -p "$dst"
+echo_with_timestamp "Starting file synchronization between ${JIANGUOYUN_AUTOPUBLISH_DIR} and ${AUTOPUBLISH_DIR}"
 
 while true; do
     # Function to check if the filename contains a date in any recognizable format
@@ -50,7 +27,7 @@ while true; do
         local file_size=$(stat --format="%s" "$src_file")
         
         if [[ "$file_size" -le 0 ]]; then
-            echo "File size of $src_file is 0, waiting for transfer to complete..."
+            echo_with_timestamp "File size of $src_file is 0, waiting for transfer to complete..."
             sleep 5
         else
             local filename=$(basename "$src_file")
@@ -69,30 +46,21 @@ while true; do
                 
                 local new_path=$(dirname "$src_file")/"$new_filename"
                 mv "$src_file" "$new_path"
-                echo "Renamed $src_file to $new_path"
-            else
-                # echo "$filename already has the $suffix suffix."
-                :
+                echo_with_timestamp "Renamed $src_file to $new_path"
             fi
         fi
     }
 
-    echo "Checking for files to process at $(date)"
-    
     # Process files ensuring they have a non-zero file size
-    if [ -d "$src" ]; then
-        find "$src" -type f -size +0c | while read src_file; do
-            process_file "$src_file"
-        done
-    fi
+    find "${JIANGUOYUN_AUTOPUBLISH_DIR}" -type f -size +0c | while read src_file; do
+        process_file "$src_file"
+    done
 
-    echo "Starting rsync at $(date)"
-    
     # Perform the rsync operation, including only files with the _COMPLETED suffix
-    rsync -rt --progress --delete --whole-file --min-size=1 --include="*_COMPLETED.*" --exclude="*" "$src" "$dst"
-    
-    echo "Finished rsync at $(date), waiting $sync_interval seconds"
+    rsync -rt --progress --delete --whole-file --min-size=1 \
+        --include="*_COMPLETED.*" --exclude="*" \
+        "${JIANGUOYUN_AUTOPUBLISH_DIR}/" "${AUTOPUBLISH_DIR}/"
     
     # Wait before repeating the operation
-    sleep $sync_interval
+    sleep 10
 done

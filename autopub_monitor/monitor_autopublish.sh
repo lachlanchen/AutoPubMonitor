@@ -1,47 +1,20 @@
 #!/bin/bash
-# monitor_autopublish.sh - Monitors directory for new video files
+# monitor_autopublish.sh - Watch for new files in the AutoPublish directory
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Source the config file
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+source "${SCRIPT_DIR}/autopub.config"
 
-# Source configuration file if it exists
-CONFIG_FILE="${SCRIPT_DIR}/autopub_config.sh"
-if [ -f "$CONFIG_FILE" ]; then
-    source "$CONFIG_FILE"
-else
-    echo "Warning: Configuration file not found at $CONFIG_FILE"
-    echo "Running setup_config.sh to generate configuration..."
-    bash "${SCRIPT_DIR}/setup_config.sh" --export
-    
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
-    else
-        echo "Error: Failed to generate configuration. Using default values."
-    fi
-fi
-
-# Paths and initial setup from configuration
-PUBLISH_SCRIPT="${AUTOPUB_AUTOPUB_SH_PATH:-${SCRIPT_DIR}/autopub.sh}"
-DIRECTORY_TO_OBSERVE="${AUTOPUB_AUTO_PUBLISH_DIR:-${HOME}/AutoPublishDATA/AutoPublish}"
-QUEUE_LIST="${AUTOPUB_QUEUE_LIST_PATH:-${SCRIPT_DIR}/queue_list.txt}"
-TEMP_QUEUE="${AUTOPUB_TEMP_QUEUE_PATH:-${SCRIPT_DIR}/temp_queue.txt}"
-CHECKED_LIST="${AUTOPUB_CHECKED_LIST_PATH:-${SCRIPT_DIR}/checked_list.txt}"
-QUEUE_LOCK="${AUTOPUB_QUEUE_LOCK_PATH:-${SCRIPT_DIR}/queue.lock}"
-
-# Function to echo with timestamp
 echo_with_timestamp() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
 }
 
-echo_with_timestamp "Watching directory: $DIRECTORY_TO_OBSERVE for new files or files moved here."
-
-# Ensure necessary files exist
+echo_with_timestamp "Watching directory: $AUTOPUBLISH_DIR for new files or files moved here."
 touch "${QUEUE_LIST}"
 touch "${TEMP_QUEUE}"
 touch "${CHECKED_LIST}"
 touch "${QUEUE_LOCK}"
 
-# Check and queue file function
 check_and_queue_file() {
     local full_path=$1
 
@@ -61,7 +34,6 @@ check_and_queue_file() {
     fi
 }
 
-# Queue file function
 queue_file() {
     local file_path=$1
     local sleep_time=$(( RANDOM % 30 + 1 ))  # Random sleep between 1 and 30 seconds
@@ -75,7 +47,6 @@ queue_file() {
     ) 200>"$QUEUE_LOCK"
 }
 
-# Handle potential conflict file function
 handle_potential_conflict_file() {
     local original_file_path=$1
     local directory=$(dirname -- "$original_file_path")
@@ -98,7 +69,6 @@ handle_potential_conflict_file() {
     echo "$original_file_path" >> "$TEMP_QUEUE"
 }
 
-# Function to monitor temp queue
 monitor_temp_queue() {
     while true; do
         if [ ! -s "$TEMP_QUEUE" ]; then
@@ -118,25 +88,9 @@ monitor_temp_queue() {
     done
 }
 
-# Ensure the directory to observe exists
-if [ ! -d "$DIRECTORY_TO_OBSERVE" ]; then
-    echo_with_timestamp "Creating directory to observe: $DIRECTORY_TO_OBSERVE"
-    mkdir -p "$DIRECTORY_TO_OBSERVE"
-fi
-
-# Start background monitoring of temp queue
 monitor_temp_queue &
 
-# Use inotifywait to monitor the directory for changes
-echo_with_timestamp "Starting inotifywait monitoring on: $DIRECTORY_TO_OBSERVE"
-
-# Check if inotifywait is installed
-if ! command -v inotifywait &> /dev/null; then
-    echo_with_timestamp "Error: inotifywait not found. Please install inotify-tools package."
-    exit 1
-fi
-
-inotifywait -m -e close_write -e moved_to "$DIRECTORY_TO_OBSERVE" |
+inotifywait -m -e close_write -e moved_to "$AUTOPUBLISH_DIR" |
 while read -r directory events filename; do
     if [[ "$filename" =~ ^\..*\..*\..*$ ]]; then
         echo_with_timestamp "Skipping temporary or system file: $filename"

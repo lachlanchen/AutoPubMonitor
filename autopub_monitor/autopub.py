@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# autopub.py - Video processing and publishing system
+# autopub.py - Main processing script for AutoPub Monitor
 
 import os
 import csv
@@ -9,39 +9,74 @@ import argparse
 import requests
 from datetime import datetime
 from pathlib import Path
+from process_video import VideoProcessor
+from selenium.webdriver.chrome.service import Service
 import subprocess
-import sys
+from tqdm import tqdm
 
-# Get the directory where this script is located
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Read configuration file
+config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'autopub.config')
 
-# Import config
-sys.path.append(SCRIPT_DIR)
+# Initialize paths with defaults
+script_dir = os.path.dirname(os.path.abspath(__file__))
+logs_folder_path = os.path.join(script_dir, 'logs')
+autopublish_folder_path = os.path.expanduser('~/AutoPublishDATA/AutoPublish')
+videos_db_path = os.path.join(script_dir, 'videos_db.csv')
+processed_path = os.path.join(script_dir, 'processed.csv')
+transcription_path = os.path.expanduser('~/AutoPublishDATA/transcription_data')
+lock_file_path = os.path.join(script_dir, 'autopub.lock')
+bash_script_path = os.path.join(script_dir, 'autopub.sh')
+upload_url = 'http://localhost:8081/upload'
+process_url = 'http://localhost:8081/video-processing'
+publish_url = 'http://lazyingart:8081/publish'
+
+# Parse the bash-style config file
 try:
-    from config import CONFIG, init_system
-except ImportError:
-    print("Error: Cannot import config module.")
-    print("Make sure config.py is in the same directory as this script.")
-    sys.exit(1)
+    with open(config_path, 'r') as f:
+        config_text = f.read()
 
-# Re-initialize system to ensure all directories and files exist
-init_system()
+    # Extract variable assignments from the config
+    for line in config_text.splitlines():
+        if line.strip() and not line.strip().startswith('#') and '=' in line:
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip('"')
+            
+            # Replace variables in the value
+            for var in re.findall(r'\${([^}]+)}', value):
+                if var in locals():
+                    value = value.replace('${' + var + '}', locals()[var])
+                    
+            # Update relevant paths
+            if key == 'LOGS_DIR':
+                logs_folder_path = value
+            elif key == 'AUTOPUBLISH_DIR':
+                autopublish_folder_path = value
+            elif key == 'VIDEOS_DB_PATH':
+                videos_db_path = value
+            elif key == 'PROCESSED_PATH':
+                processed_path = value
+            elif key == 'TRANSCRIPTION_DIR':
+                transcription_path = value
+            elif key == 'AUTOPUB_LOCK':
+                lock_file_path = value
+            elif key == 'AUTOPUB_SH':
+                bash_script_path = value
+            elif key == 'UPLOAD_URL':
+                upload_url = value
+            elif key == 'PROCESS_URL':
+                process_url = value
+            elif key == 'PUBLISH_URL':
+                publish_url = value
+except Exception as e:
+    print(f"Warning: Error reading config file: {e}. Using default paths.")
 
-# Import local modules
-try:
-    from process_video import VideoProcessor
-    from selenium.webdriver.chrome.service import Service
-except ImportError as e:
-    print(f"Error importing required modules: {e}")
-    print("Make sure all required packages are installed.")
-    sys.exit(1)
-
-# Get paths from config
-logs_folder_path = CONFIG["logs_dir"]
-autopublish_folder_path = CONFIG["auto_publish_dir"]
-videos_db_path = CONFIG["videos_db_path"]
-processed_path = CONFIG["processed_path"]
-transcription_path = CONFIG["transcription_data_dir"]
+# Ensure the logs, videos, and database files exist
+os.makedirs(logs_folder_path, exist_ok=True)
+os.makedirs(autopublish_folder_path, exist_ok=True)
+os.makedirs(transcription_path, exist_ok=True)
+open(videos_db_path, 'a').close()
+open(processed_path, 'a').close()
 
 # Function to read CSV and get a list of filenames
 def read_csv(csv_path):
@@ -66,10 +101,6 @@ def process_and_publish_file(
     use_translation_cache=False,
     use_metadata_cache=False
 ):
-    upload_url = CONFIG["upload_url"]
-    process_url = CONFIG["process_url"]
-    publish_url = CONFIG["publish_url"]
-    
     # Create an instance of VideoProcessor and process the video
     print("Processing file...")
     processor = VideoProcessor(upload_url, process_url, file_path, transcription_path)
@@ -98,10 +129,16 @@ def process_and_publish_file(
     else:
         print(f"Failed to process video: {file_path}")
 
+def visualize_progress(total_files):
+    """Visualize the processing progress."""
+    return tqdm(total=total_files, desc="Processing videos", unit="file")
+
 if __name__ == "__main__":
-    # Lock file is now relative to script directory
-    lock_file_path = os.path.join(SCRIPT_DIR, "autopub.lock")
-    bash_script_path = CONFIG["autopub_sh_path"]
+    # Set random seed for reproducibility
+    import random
+    import numpy as np
+    random.seed(23)
+    np.random.seed(23)
 
     # Check if lock file exists, if not, create it
     if not os.path.exists(lock_file_path):
@@ -114,25 +151,20 @@ if __name__ == "__main__":
     parser.add_argument('--pub-douyin', action='store_true', help="Publish on DouYin")
     parser.add_argument('--pub-shipinhao', action='store_true', help="Publish on ShiPinHao")
     parser.add_argument('--pub-y2b', action='store_true', help="Publish on YouTube")
-    parser.add_argument('--no-pub', action='store_true', help="Don't publish anywhere")
+    parser.add_argument('--no-pub', action='store_true', help="Don't publish to any platform")
     parser.add_argument('--test', action='store_true', help="Run in test mode")
     parser.add_argument('--use-cache', action='store_true', help="Use cache")
     parser.add_argument('--use-translation-cache', action='store_true', help="Use translation cache")
     parser.add_argument('--use-metadata-cache', action='store_true', help="Use metadata cache")
     parser.add_argument('--force', action='store', type=str, help="Force update the file followed by the --force argument")
     parser.add_argument('--path', action='store', type=str, help="Process only the file at this path")
+    parser.add_argument('-v', '--verbose', action='store_true', help="Show progress bar")
     args = parser.parse_args()
 
     # Determine publishing platforms based on provided arguments
-    # If none of the publish_xxx flags are provided, default to values in config
-    default_platforms = CONFIG["default_publish_platforms"]
-    
+    # If none of the publish_xxx flags are provided, default to publishing on all platforms
     if not any([args.pub_xhs, args.pub_bilibili, args.pub_douyin, args.pub_y2b, args.pub_shipinhao]):
-        publish_xhs = default_platforms["publish_xhs"]
-        publish_bilibili = default_platforms["publish_bilibili"]
-        publish_douyin = default_platforms["publish_douyin"]
-        publish_shipinhao = default_platforms["publish_shipinhao"]
-        publish_y2b = default_platforms["publish_y2b"]
+        publish_xhs = publish_bilibili = publish_douyin = publish_y2b = publish_shipinhao = True
     else:
         publish_xhs = args.pub_xhs
         publish_bilibili = args.pub_bilibili
@@ -150,13 +182,12 @@ if __name__ == "__main__":
     test_mode = args.test
     use_cache = args.use_cache
     force_filename = args.force
-    
     if not (force_filename is None):
         force_filename = force_filename.strip()
     else:
         force_filename = ""
-    
     force_files = force_filename.split(",")
+
     use_translation_cache = args.use_translation_cache
     use_metadata_cache = args.use_metadata_cache
 
@@ -164,9 +195,8 @@ if __name__ == "__main__":
     log_filename = f"{current_datetime.strftime('%Y-%m-%d %H-%M-%S')}.txt"
     log_file_path = os.path.join(logs_folder_path, log_filename)
 
-    # Define video file pattern based on extensions in config
-    extensions = "|".join(CONFIG["video_file_extensions"])
-    video_file_pattern = re.compile(rf'.+\.({extensions})$', re.IGNORECASE)
+    # Define video file pattern
+    video_file_pattern = re.compile(r'.+\.(mp4|mov|avi|flv|wmv|mkv)$', re.IGNORECASE)
     
     # Single file mode
     if args.path:
@@ -191,7 +221,8 @@ if __name__ == "__main__":
         else:
             print(f"The file {filename} does not match the video file pattern or has already been processed.")
     else:
-        # Check each file in the autopublish folder
+        # Get list of video files to process
+        files_to_process = []
         for filename in os.listdir(autopublish_folder_path):
             if filename.startswith("preprocessed"):
                 update_csv_if_new(filename, processed_path)
@@ -204,24 +235,49 @@ if __name__ == "__main__":
                     update_csv_if_new(filename, videos_db_path)
                     
                     processed_files = read_csv(processed_path)
-                    # If not processed, process the file and update processed.csv
                     if ((force_files and any(force_file.strip() in filename for force_file in force_files)) or 
-                        (filename and filename in force_files)) or (not force_filename and filename not in processed_files):
-                        print("process and publish file: ", file_path)
-                        process_and_publish_file(
-                            file_path,
-                            publish_xhs=publish_xhs,
-                            publish_bilibili=publish_bilibili,
-                            publish_douyin=publish_douyin,
-                            publish_y2b=publish_y2b,
-                            publish_shipinhao=publish_shipinhao,
-                            test_mode=test_mode,
-                            use_cache=use_cache,
-                            use_translation_cache=use_translation_cache,
-                            use_metadata_cache=use_metadata_cache
-                        )
-                        update_csv_if_new(filename, processed_path)
+                       (filename and filename in force_files)) or (not force_filename and filename not in processed_files):
+                        files_to_process.append(file_path)
 
-    # After all tasks are done, remove the lock file
-    if os.path.exists(lock_file_path):
-        os.remove(lock_file_path)
+        # Process files with progress visualization if verbose
+        if args.verbose and files_to_process:
+            progress_bar = visualize_progress(len(files_to_process))
+            for file_path in files_to_process:
+                filename = os.path.basename(file_path)
+                print("process and publish file: ", file_path)
+                process_and_publish_file(
+                    file_path,
+                    publish_xhs=publish_xhs,
+                    publish_bilibili=publish_bilibili,
+                    publish_douyin=publish_douyin,
+                    publish_y2b=publish_y2b,
+                    publish_shipinhao=publish_shipinhao,
+                    test_mode=test_mode,
+                    use_cache=use_cache,
+                    use_translation_cache=use_translation_cache,
+                    use_metadata_cache=use_metadata_cache
+                )
+                update_csv_if_new(filename, processed_path)
+                progress_bar.update(1)
+            progress_bar.close()
+        else:
+            for file_path in files_to_process:
+                filename = os.path.basename(file_path)
+                print("process and publish file: ", file_path)
+                process_and_publish_file(
+                    file_path,
+                    publish_xhs=publish_xhs,
+                    publish_bilibili=publish_bilibili,
+                    publish_douyin=publish_douyin,
+                    publish_y2b=publish_y2b,
+                    publish_shipinhao=publish_shipinhao,
+                    test_mode=test_mode,
+                    use_cache=use_cache,
+                    use_translation_cache=use_translation_cache,
+                    use_metadata_cache=use_metadata_cache
+                )
+                update_csv_if_new(filename, processed_path)
+
+# After all tasks are done, remove the lock file
+if os.path.exists(lock_file_path):
+    os.remove(lock_file_path)
