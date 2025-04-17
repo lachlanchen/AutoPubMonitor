@@ -97,6 +97,7 @@ EOF
     sudo systemctl daemon-reload
     
     echo_with_timestamp "To enable the service at boot, run: sudo systemctl enable autopub-monitor.service"
+    sudo systemctl enable --now autopub-monitor.service
     echo_with_timestamp "To start the service now, run: sudo systemctl start autopub-monitor.service"
 }
 

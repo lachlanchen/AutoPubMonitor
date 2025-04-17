@@ -30,51 +30,71 @@ upload_url = 'http://localhost:8081/upload'
 process_url = 'http://localhost:8081/video-processing'
 publish_url = 'http://lazyingart:8081/publish'
 
-# Parse the bash-style config file
+# Parse the bash-style config file using subprocess to evaluate shell expressions
 try:
-    with open(config_path, 'r') as f:
-        config_text = f.read()
-
-    # Extract variable assignments from the config
-    for line in config_text.splitlines():
-        if line.strip() and not line.strip().startswith('#') and '=' in line:
+    # Create a temporary shell script that will output the evaluated values
+    temp_script_path = os.path.join(os.path.dirname(config_path), '.temp_config_eval.sh')
+    with open(temp_script_path, 'w') as temp_script:
+        temp_script.write('#!/bin/bash\n')
+        temp_script.write(f'source {config_path}\n')
+        temp_script.write('echo "LOGS_DIR=$LOGS_DIR"\n')
+        temp_script.write('echo "AUTOPUBLISH_DIR=$AUTOPUBLISH_DIR"\n')
+        temp_script.write('echo "VIDEOS_DB_PATH=$VIDEOS_DB_PATH"\n')
+        temp_script.write('echo "PROCESSED_PATH=$PROCESSED_PATH"\n')
+        temp_script.write('echo "TRANSCRIPTION_DIR=$TRANSCRIPTION_DIR"\n')
+        temp_script.write('echo "AUTOPUB_LOCK=$AUTOPUB_LOCK"\n')
+        temp_script.write('echo "AUTOPUB_SH=$AUTOPUB_SH"\n')
+        temp_script.write('echo "UPLOAD_URL=$UPLOAD_URL"\n')
+        temp_script.write('echo "PROCESS_URL=$PROCESS_URL"\n')
+        temp_script.write('echo "PUBLISH_URL=$PUBLISH_URL"\n')
+    
+    # Make the script executable
+    os.chmod(temp_script_path, 0o755)
+    
+    # Execute the shell script and capture its output
+    result = subprocess.run([temp_script_path], capture_output=True, text=True, check=True)
+    
+    # Clean up the temporary script
+    os.remove(temp_script_path)
+    
+    # Parse the output to get the evaluated variables
+    config_vars = {}
+    for line in result.stdout.splitlines():
+        if '=' in line:
             key, value = line.split('=', 1)
-            key = key.strip()
-            value = value.strip().strip('"')
-            
-            # Replace variables in the value
-            for var in re.findall(r'\${([^}]+)}', value):
-                if var in locals():
-                    value = value.replace('${' + var + '}', locals()[var])
-                    
-            # Update relevant paths
-            if key == 'LOGS_DIR':
-                logs_folder_path = value
-            elif key == 'AUTOPUBLISH_DIR':
-                autopublish_folder_path = value
-            elif key == 'VIDEOS_DB_PATH':
-                videos_db_path = value
-            elif key == 'PROCESSED_PATH':
-                processed_path = value
-            elif key == 'TRANSCRIPTION_DIR':
-                transcription_path = value
-            elif key == 'AUTOPUB_LOCK':
-                lock_file_path = value
-            elif key == 'AUTOPUB_SH':
-                bash_script_path = value
-            elif key == 'UPLOAD_URL':
-                upload_url = value
-            elif key == 'PROCESS_URL':
-                process_url = value
-            elif key == 'PUBLISH_URL':
-                publish_url = value
+            config_vars[key] = value
+    
+    # Update the relevant path variables
+    if 'LOGS_DIR' in config_vars:
+        logs_folder_path = config_vars['LOGS_DIR']
+    if 'AUTOPUBLISH_DIR' in config_vars:
+        autopublish_folder_path = config_vars['AUTOPUBLISH_DIR']
+    if 'VIDEOS_DB_PATH' in config_vars:
+        videos_db_path = config_vars['VIDEOS_DB_PATH']
+    if 'PROCESSED_PATH' in config_vars:
+        processed_path = config_vars['PROCESSED_PATH']
+    if 'TRANSCRIPTION_DIR' in config_vars:
+        transcription_path = config_vars['TRANSCRIPTION_DIR']
+    if 'AUTOPUB_LOCK' in config_vars:
+        lock_file_path = config_vars['AUTOPUB_LOCK']
+    if 'AUTOPUB_SH' in config_vars:
+        bash_script_path = config_vars['AUTOPUB_SH']
+    if 'UPLOAD_URL' in config_vars:
+        upload_url = config_vars['UPLOAD_URL']
+    if 'PROCESS_URL' in config_vars:
+        process_url = config_vars['PROCESS_URL']
+    if 'PUBLISH_URL' in config_vars:
+        publish_url = config_vars['PUBLISH_URL']
 except Exception as e:
     print(f"Warning: Error reading config file: {e}. Using default paths.")
 
 # Ensure the logs, videos, and database files exist
 os.makedirs(logs_folder_path, exist_ok=True)
+print("logs_folder_path: ", logs_folder_path)
 os.makedirs(autopublish_folder_path, exist_ok=True)
+print("autopublish_folder_path: ", autopublish_folder_path)
 os.makedirs(transcription_path, exist_ok=True)
+print("transcription_path: ", transcription_path)
 open(videos_db_path, 'a').close()
 open(processed_path, 'a').close()
 
