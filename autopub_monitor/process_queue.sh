@@ -20,7 +20,7 @@ echo_with_timestamp "Starting process_queue.sh script..."
 echo_with_timestamp "Entering main processing loop..."
 while true; do
     TIMESTAMP=$(date +%s)
-    TMP_FILE="/tmp/queue_path_$TIMESTAMP.txt"
+    TMP_FILE="/dev/shm/queue_path_$TIMESTAMP.txt"
     {
         flock -x 200
         if [ -s "$QUEUE_LIST" ]; then
@@ -50,9 +50,11 @@ while true; do
             echo_with_timestamp "Processing failed for: ${full_path} with error code $result"
         fi
         
-        rm "$TMP_FILE"
+        # rm "$TMP_FILE"
     else
-        # echo_with_timestamp "No valid file to process. Waiting for new files in the queue..."
-        sleep 1
+        echo_with_timestamp "No valid file to process. Waiting for new files in the queue..."
+        sleep 10
     fi
+
+    rm "$TMP_FILE"
 done

@@ -13,6 +13,8 @@ import numpy as np
 from tqdm import tqdm
 import json
 
+from video_utils import preprocess_if_needed
+
 def get_video_length(filename):
     """Returns the length of the video in seconds or None if unable to determine."""
     try:
@@ -95,14 +97,32 @@ def augment_video(video_path, augmented_length, output_path):
     return output_path
 
 class VideoProcessor:
-    def __init__(self, upload_url, process_url, video_path, transcription_path):
+    def __init__(self, upload_url, process_url, video_path, transcription_path, preprocess_dir=None):
         self.upload_url = upload_url
         self.process_url = process_url
         self.video_path = video_path
         self.transcription_path = transcription_path
+        self.preprocess_dir = preprocess_dir
         os.makedirs(self.transcription_path, exist_ok=True)
 
         input_file = self.video_path
+
+        ## Preprocessing ##
+        # input_file = preprocess_if_needed(input_file)
+        # Preprocess video if needed (replace the existing preprocess_if_needed call)
+        base_name, extension = os.path.splitext(os.path.basename(input_file))
+        
+        # Use specified temp directory or create one
+        if self.preprocess_dir:
+            os.makedirs(self.preprocess_dir, exist_ok=True)
+            temp_dir = self.preprocess_dir
+        else:
+            temp_dir = tempfile.mkdtemp(prefix="video_preprocess_")
+        
+        preprocessed_file = preprocess_if_needed(input_file, temp_dir)
+        input_file = preprocessed_file
+
+        ## Augmentation ##
         # Define the minimum length for the video in seconds
         augmented_length = 7  # 7 seconds
         threshold_length = augmented_length
@@ -122,6 +142,8 @@ class VideoProcessor:
             # Proceed with augmentation if the video is shorter than the augmented_length
             print(f"Video length {video_length} is shorter than {threshold_length}. Augmenting to {augmented_length}s.")
             input_file = self.augment_video_if_needed(input_file, augmented_length)
+
+       
 
         self.video_path = input_file
 
@@ -257,14 +279,16 @@ if __name__ == "__main__":
     np.random.seed(23)
     
     # Example usage
-    video_path = '/path/to/your/video.mp4'
+    video_path = '/home/lachlan/AutoPublishDATA/Autopublish/video.mp4'
     server_url = 'http://localhost:8081/video-processing'
-    transcription_path = "/path/to/transcription_data"
+    transcription_path = "/home/lachlan/AutoPublishDATA/transcription_data"
+    preprocess_dir="/home/lachlan/AutoPublishDATA/PreprocessedVideos" 
 
     processor = VideoProcessor(
         upload_url='http://localhost:8081/upload',
         process_url=server_url,
         video_path=video_path, 
-        transcription_path=transcription_path
+        transcription_path=transcription_path,
+        preprocess_dir=preprocess_dir
     )
     processor.process_video(use_cache=True)

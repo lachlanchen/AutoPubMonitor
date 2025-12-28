@@ -24,6 +24,7 @@ autopublish_folder_path = os.path.expanduser('~/AutoPublishDATA/AutoPublish')
 videos_db_path = os.path.join(script_dir, 'videos_db.csv')
 processed_path = os.path.join(script_dir, 'processed.csv')
 transcription_path = os.path.expanduser('~/AutoPublishDATA/transcription_data')
+preprocess_dir = os.path.expanduser('~/AutoPublishDATA/PreprocessedVideos')
 lock_file_path = os.path.join(script_dir, 'autopub.lock')
 bash_script_path = os.path.join(script_dir, 'autopub.sh')
 upload_url = 'http://localhost:8081/upload'
@@ -42,6 +43,8 @@ try:
         temp_script.write('echo "VIDEOS_DB_PATH=$VIDEOS_DB_PATH"\n')
         temp_script.write('echo "PROCESSED_PATH=$PROCESSED_PATH"\n')
         temp_script.write('echo "TRANSCRIPTION_DIR=$TRANSCRIPTION_DIR"\n')
+        # Add this line after the TRANSCRIPTION_DIR line in the temp script:
+        temp_script.write('echo "PREPROCESSED_VIDEOS_DIR=$PREPROCESSED_VIDEOS_DIR"\n')
         temp_script.write('echo "AUTOPUB_LOCK=$AUTOPUB_LOCK"\n')
         temp_script.write('echo "AUTOPUB_SH=$AUTOPUB_SH"\n')
         temp_script.write('echo "UPLOAD_URL=$UPLOAD_URL"\n')
@@ -75,6 +78,8 @@ try:
         processed_path = config_vars['PROCESSED_PATH']
     if 'TRANSCRIPTION_DIR' in config_vars:
         transcription_path = config_vars['TRANSCRIPTION_DIR']
+    if 'PREPROCESSED_VIDEOS_DIR' in config_vars:  # Add this block
+        preprocess_dir = config_vars['PREPROCESSED_VIDEOS_DIR']
     if 'AUTOPUB_LOCK' in config_vars:
         lock_file_path = config_vars['AUTOPUB_LOCK']
     if 'AUTOPUB_SH' in config_vars:
@@ -123,7 +128,13 @@ def process_and_publish_file(
 ):
     # Create an instance of VideoProcessor and process the video
     print("Processing file...")
-    processor = VideoProcessor(upload_url, process_url, file_path, transcription_path)
+    processor = VideoProcessor(
+        upload_url, 
+        process_url, 
+        file_path, 
+        transcription_path,
+        preprocess_dir=preprocess_dir  # Add this parameter
+    )
     zip_file_path = processor.process_video(
         use_cache=use_cache,
         use_translation_cache=use_translation_cache,
