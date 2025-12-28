@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="figs/banner.png" alt="LazyingArt banner" />
+</p>
+
 # AutoPubMonitor
 
 An automated system for monitoring, processing, and publishing video content to multiple platforms.
