@@ -222,7 +222,7 @@ if __name__ == "__main__":
     parser.add_argument('--use-cache', action='store_true', help="Use cache")
     parser.add_argument('--use-translation-cache', action='store_true', help="Use translation cache")
     parser.add_argument('--use-metadata-cache', action='store_true', help="Use metadata cache")
-    parser.add_argument('--force', action='store', type=str, help="Force update the file followed by the --force argument")
+    parser.add_argument('--force', nargs='?', const="", default="", help="Force update the file followed by the --force argument")
     parser.add_argument('--path', action='store', type=str, help="Process only the file at this path")
     parser.add_argument('-v', '--verbose', action='store_true', help="Show progress bar")
     args = parser.parse_args()
