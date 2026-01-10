@@ -97,12 +97,23 @@ def augment_video(video_path, augmented_length, output_path):
     return output_path
 
 class VideoProcessor:
-    def __init__(self, upload_url, process_url, video_path, transcription_path, preprocess_dir=None):
+    def __init__(
+        self,
+        upload_url,
+        process_url,
+        video_path,
+        transcription_path,
+        preprocess_dir=None,
+        use_app_api=False,
+        upload_source=None,
+    ):
         self.upload_url = upload_url
         self.process_url = process_url
         self.video_path = video_path
         self.transcription_path = transcription_path
         self.preprocess_dir = preprocess_dir
+        self.use_app_api = use_app_api
+        self.upload_source = upload_source or ("api" if use_app_api else None)
         os.makedirs(self.transcription_path, exist_ok=True)
 
         input_file = self.video_path
@@ -161,6 +172,16 @@ class VideoProcessor:
         new_path = augment_video(input_file, augmented_length, augmented_video_path)
         return new_path
 
+    @staticmethod
+    def format_video_url(url, video_id):
+        if not url or video_id is None:
+            return url
+        if "{video_id}" in url:
+            return url.replace("{video_id}", str(video_id))
+        if "{id}" in url:
+            return url.replace("{id}", str(video_id))
+        return url
+
     def process_video(self, 
         use_cache=False,
         use_translation_cache=False,
@@ -183,13 +204,20 @@ class VideoProcessor:
                 print("Cache ignored: use_cache=false.")
         
         # Upload the video file
+        upload_data = {
+            "filename": os.path.basename(self.video_path),
+            "title": Path(self.video_path).stem,
+        }
+        if self.upload_source:
+            upload_data["source"] = self.upload_source
+
         if not self.upload_url.endswith("stream"):
             with open(self.video_path, 'rb') as f:
                 files = {'video': (os.path.basename(self.video_path), f)}
                 response = requests.post(
                     self.upload_url, 
                     files=files, 
-                    data={'filename': os.path.basename(self.video_path)}
+                    data=upload_data
                 )
         else:
             # Preprocess the file for streaming upload
@@ -199,7 +227,7 @@ class VideoProcessor:
                 response = requests.put(
                     self.upload_url, 
                     files=files, 
-                    params={'filename': os.path.basename(preprocessed_file_path)}
+                    params=upload_data
                 )
 
         if not response.ok:
@@ -207,16 +235,50 @@ class VideoProcessor:
             return
 
         # Extract the file path from the response
-        uploaded_file_path = response.json().get('file_path')
+        try:
+            upload_payload = response.json()
+        except Exception:
+            print(f"Failed to parse upload response: {response.text}")
+            return
+
+        uploaded_file_path = upload_payload.get('file_path')
+        uploaded_video_id = upload_payload.get('video_id')
         if not uploaded_file_path:
             print("Failed to get the uploaded file path from the server response.")
             return
 
-        # Request processing of the uploaded file
+        if self.use_app_api:
+            if not uploaded_video_id:
+                print("Upload response missing video_id; cannot continue.")
+                return
+
+            process_url = self.format_video_url(self.process_url, uploaded_video_id)
+            process_payload = {
+                "use_translation_cache": use_translation_cache,
+                "use_metadata_cache": use_metadata_cache,
+            }
+            process_response = requests.post(process_url, json=process_payload)
+            if not process_response.ok:
+                print(f'Failed to process file. Status code: {process_response.status_code}, Message: {process_response.text}')
+                return
+
+            try:
+                process_payload = process_response.json()
+            except Exception:
+                process_payload = {"raw": process_response.text}
+
+            return {
+                "video_id": uploaded_video_id,
+                "file_path": uploaded_file_path,
+                "upload": upload_payload,
+                "process": process_payload,
+            }
+
+        # Request processing of the uploaded file (legacy zip flow)
         process_response = requests.post(
-            self.process_url, 
+            self.process_url,
             data={
-                'file_path': uploaded_file_path, 
+                'file_path': uploaded_file_path,
                 "use_translation_cache": use_translation_cache,
                 "use_metadata_cache": use_metadata_cache
             }

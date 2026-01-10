@@ -30,6 +30,7 @@ bash_script_path = os.path.join(script_dir, 'autopub.sh')
 upload_url = 'http://localhost:8081/upload'
 process_url = 'http://localhost:8081/video-processing'
 publish_url = 'http://lazyingart:8081/publish'
+use_app_api = False
 
 # Parse the bash-style config file using subprocess to evaluate shell expressions
 try:
@@ -50,6 +51,7 @@ try:
         temp_script.write('echo "UPLOAD_URL=$UPLOAD_URL"\n')
         temp_script.write('echo "PROCESS_URL=$PROCESS_URL"\n')
         temp_script.write('echo "PUBLISH_URL=$PUBLISH_URL"\n')
+        temp_script.write('echo "USE_APP_API=$USE_APP_API"\n')
     
     # Make the script executable
     os.chmod(temp_script_path, 0o755)
@@ -90,6 +92,8 @@ try:
         process_url = config_vars['PROCESS_URL']
     if 'PUBLISH_URL' in config_vars:
         publish_url = config_vars['PUBLISH_URL']
+    if 'USE_APP_API' in config_vars:
+        use_app_api = config_vars['USE_APP_API'].strip().lower() in ("1", "true", "yes")
 except Exception as e:
     print(f"Warning: Error reading config file: {e}. Using default paths.")
 
@@ -124,7 +128,8 @@ def process_and_publish_file(
     test_mode, 
     use_cache,
     use_translation_cache=False,
-    use_metadata_cache=False
+    use_metadata_cache=False,
+    use_app_api=False,
 ):
     # Create an instance of VideoProcessor and process the video
     print("Processing file...")
@@ -133,18 +138,48 @@ def process_and_publish_file(
         process_url, 
         file_path, 
         transcription_path,
-        preprocess_dir=preprocess_dir  # Add this parameter
+        preprocess_dir=preprocess_dir,  # Add this parameter
+        use_app_api=use_app_api,
     )
-    zip_file_path = processor.process_video(
+    process_result = processor.process_video(
         use_cache=use_cache,
         use_translation_cache=use_translation_cache,
         use_metadata_cache=use_metadata_cache
     )
 
-    if zip_file_path:
+    if use_app_api:
+        if not process_result or not isinstance(process_result, dict):
+            print(f"Failed to process video: {file_path}")
+            return
+        video_id = process_result.get("video_id")
+        if not video_id:
+            print("Missing video_id from upload response; skipping publish.")
+            return
+
+        if not any([publish_xhs, publish_bilibili, publish_douyin, publish_shipinhao, publish_y2b]):
+            print("Publishing disabled; skipping publish call.")
+            return
+
+        publish_endpoint = VideoProcessor.format_video_url(publish_url, video_id)
+        payload = {
+            "platforms": {
+                "xiaohongshu": publish_xhs,
+                "bilibili": publish_bilibili,
+                "douyin": publish_douyin,
+                "shipinhao": publish_shipinhao,
+                "youtube": publish_y2b,
+            },
+            "test": test_mode,
+        }
+        print(f"Publishing via app API: {publish_endpoint}")
+        response = requests.post(publish_endpoint, json=payload)
+        print(f"Response: {response.text}")
+        return
+
+    if process_result:
         # Send zip file to lazyingart server for publishing
-        with open(zip_file_path, 'rb') as f:
-            files = {'file': (os.path.basename(zip_file_path), f)}
+        with open(process_result, 'rb') as f:
+            files = {'file': (os.path.basename(process_result), f)}
             data = {
                 'publish_xhs': str(publish_xhs).lower(),
                 'publish_bilibili': str(publish_bilibili).lower(),
@@ -152,9 +187,9 @@ def process_and_publish_file(
                 'publish_shipinhao': str(publish_shipinhao).lower(),
                 'publish_y2b': str(publish_y2b).lower(),
                 'test': str(test_mode).lower(),
-                'filename': os.path.basename(zip_file_path),
+                'filename': os.path.basename(process_result),
             }
-            print(f"Publishing {zip_file_path}")
+            print(f"Publishing {process_result}")
             response = requests.post(publish_url, files=files, data=data)
             print(f"Response: {response.text}")
     else:
@@ -246,7 +281,8 @@ if __name__ == "__main__":
                     test_mode=test_mode,
                     use_cache=use_cache,
                     use_translation_cache=use_translation_cache,
-                    use_metadata_cache=use_metadata_cache
+                    use_metadata_cache=use_metadata_cache,
+                    use_app_api=use_app_api
                 )
                 update_csv_if_new(filename, processed_path)
         else:
@@ -286,7 +322,8 @@ if __name__ == "__main__":
                     test_mode=test_mode,
                     use_cache=use_cache,
                     use_translation_cache=use_translation_cache,
-                    use_metadata_cache=use_metadata_cache
+                    use_metadata_cache=use_metadata_cache,
+                    use_app_api=use_app_api
                 )
                 update_csv_if_new(filename, processed_path)
                 progress_bar.update(1)
@@ -305,7 +342,8 @@ if __name__ == "__main__":
                     test_mode=test_mode,
                     use_cache=use_cache,
                     use_translation_cache=use_translation_cache,
-                    use_metadata_cache=use_metadata_cache
+                    use_metadata_cache=use_metadata_cache,
+                    use_app_api=use_app_api
                 )
                 update_csv_if_new(filename, processed_path)
 
