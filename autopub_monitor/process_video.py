@@ -254,28 +254,39 @@ class VideoProcessor:
             if not uploaded_video_id:
                 print("Upload response missing video_id; cannot continue.")
                 return
-
-            process_url = self.format_video_url(self.process_url, uploaded_video_id)
-            process_payload = {
-                "use_translation_cache": use_translation_cache,
-                "use_metadata_cache": use_metadata_cache,
-            }
-            process_response = requests.post(process_url, json=process_payload)
-            if not process_response.ok:
-                print(f'Failed to process file. Status code: {process_response.status_code}, Message: {process_response.text}')
-                return
-
-            try:
-                process_payload = process_response.json()
-            except Exception:
-                process_payload = {"raw": process_response.text}
-
+            print("Upload complete. Skipping auto processing for app API uploads.")
             return {
                 "video_id": uploaded_video_id,
                 "file_path": uploaded_file_path,
                 "upload": upload_payload,
-                "process": process_payload,
+                "process": None,
             }
+
+            # Auto-processing via app API is disabled on purpose.
+            # process_url = self.format_video_url(self.process_url, uploaded_video_id)
+            # process_payload = {
+            #     "use_translation_cache": use_translation_cache,
+            #     "use_metadata_cache": use_metadata_cache,
+            # }
+            # process_response = requests.post(process_url, json=process_payload)
+            # if not process_response.ok:
+            #     print(
+            #         f'Failed to process file. Status code: {process_response.status_code}, '
+            #         f'Message: {process_response.text}'
+            #     )
+            #     return
+            #
+            # try:
+            #     process_payload = process_response.json()
+            # except Exception:
+            #     process_payload = {"raw": process_response.text}
+            #
+            # return {
+            #     "video_id": uploaded_video_id,
+            #     "file_path": uploaded_file_path,
+            #     "upload": upload_payload,
+            #     "process": process_payload,
+            # }
 
         # Request processing of the uploaded file (legacy zip flow)
         process_response = requests.post(
