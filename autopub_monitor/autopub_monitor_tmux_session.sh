@@ -45,7 +45,7 @@ if [ "$1" = "start" ]; then
         tmux send-keys -t "$SESSION_NAME":0.3 "cd ${PROJECT_DIR}" C-m
         tmux send-keys -t "$SESSION_NAME":0.3 "source ~/.bashrc" C-m
         tmux send-keys -t "$SESSION_NAME":0.3 "conda activate lazyedit" C-m
-        tmux send-keys -t "$SESSION_NAME":0.3 "python ${AUTOPUB_PY} --use-cache --use-translation-cache --use-metadata-cache --force" C-m
+        tmux send-keys -t "$SESSION_NAME":0.3 "python ${AUTOPUB_PY} --use-cache --use-translation-cache --use-metadata-cache --force"
     fi
     
     # Create the 'transcription-sync' session for syncing transcription_data directory

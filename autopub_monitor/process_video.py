@@ -192,10 +192,13 @@ class VideoProcessor:
         os.makedirs(zip_file_root, exist_ok=True)
         zip_file_path = os.path.join(zip_file_root, f"{video_name}.zip")
 
-        # Check cache
+        # Check cache (legacy zip flow only)
         if use_cache and os.path.isfile(zip_file_path):
-            print(f"Cache hit! Returning the processed file from {zip_file_path}.")
-            return zip_file_path
+            if self.use_app_api:
+                print("App API mode ignores local zip cache; continuing upload.")
+            else:
+                print(f"Cache hit! Returning the processed file from {zip_file_path}.")
+                return zip_file_path
         else:
             if not os.path.isfile(zip_file_path):
                 print(f"{zip_file_path} not found.")
