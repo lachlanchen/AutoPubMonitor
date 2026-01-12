@@ -229,8 +229,15 @@ if __name__ == "__main__":
 
     # Determine publishing platforms based on provided arguments
     # If none of the publish_xxx flags are provided, default to publishing on all platforms
-    if not any([args.pub_xhs, args.pub_bilibili, args.pub_douyin, args.pub_y2b, args.pub_shipinhao]):
-        publish_xhs = publish_bilibili = publish_douyin = publish_y2b = publish_shipinhao = True
+    publish_flags_provided = any(
+        [args.pub_xhs, args.pub_bilibili, args.pub_douyin, args.pub_y2b, args.pub_shipinhao]
+    )
+    if not publish_flags_provided:
+        if use_app_api:
+            # App API mode defaults to upload-only unless explicit publish flags are provided.
+            publish_xhs = publish_bilibili = publish_douyin = publish_y2b = publish_shipinhao = False
+        else:
+            publish_xhs = publish_bilibili = publish_douyin = publish_y2b = publish_shipinhao = True
     else:
         publish_xhs = args.pub_xhs
         publish_bilibili = args.pub_bilibili
