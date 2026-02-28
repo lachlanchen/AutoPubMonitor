@@ -1,10 +1,7 @@
 [English](../README.md) · [العربية](README.ar.md) · [Español](README.es.md) · [Français](README.fr.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Tiếng Việt](README.vi.md) · [中文 (简体)](README.zh-Hans.md) · [中文（繁體）](README.zh-Hant.md) · [Deutsch](README.de.md) · [Русский](README.ru.md)
 
 
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/lachlanchen/lachlanchen/main/logos/banner.png" alt="LazyingArt banner" />
-</p>
+[![LazyingArt banner](https://github.com/lachlanchen/lachlanchen/raw/main/figs/banner.png)](https://github.com/lachlanchen/lachlanchen/blob/main/figs/banner.png)
 
 # AutoPubMonitor
 
@@ -12,32 +9,79 @@
 [![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey)](#prerequisites)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](#prerequisites)
 [![Service](https://img.shields.io/badge/runtime-tmux%20%2B%20systemd-2ea44f)](#usage)
+[![Monitors](https://img.shields.io/badge/monitoring-inotifywait-0ea5e9)](#usage)
+[![Queueing](https://img.shields.io/badge/queue-flock-16a34a)](#system-components)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa)](https://github.com/sponsors/lachlanchen)
+[![Activity](https://img.shields.io/github/last-commit/lachlanchen/AutoPubMonitor?style=flat-square&label=last%20commit&color=1d76db)](https://github.com/lachlanchen/AutoPubMonitor/commits/main)
+[![Repo Size](https://img.shields.io/github/repo-size/lachlanchen/AutoPubMonitor?style=flat-square&color=0366d6)](https://github.com/lachlanchen/AutoPubMonitor)
+[![Issues](https://img.shields.io/github/issues/lachlanchen/AutoPubMonitor?style=flat-square)](https://github.com/lachlanchen/AutoPubMonitor/issues)
+[![Contributors](https://img.shields.io/github/contributors/lachlanchen/AutoPubMonitor?style=flat-square)](https://github.com/lachlanchen/AutoPubMonitor/graphs/contributors)
 
-一套用於監控、處理並將影片內容發佈到多平台的自動化系統。
+> 用於監控、處理並將影片內容發布到多個平台的自動化系統。
 
-## 概覽
-
-AutoPubMonitor 是一個以 Linux 為核心的自動化流程管線，專為影片內容處理與多平台發佈而設計。系統會偵測新影片檔案，依序執行相容性修復、可選增強、透過 API 的轉錄/翻譯相關處理，並將結果發佈到已配置的平台。
-
-執行環境以 shell 為協調核心（`tmux`、`inotifywait`、`rsync`、`flock`），搭配 Python 處理客戶端與 CSV/文字狀態追蹤。
-
-## 主要功能
-
-| 能力 | 說明 |
+| What to expect | Detail |
 |---|---|
-| 自動檔案偵測 | 監看目錄中的新影片內容 |
-| 處理佇列管理 | 以可控、序列化方式處理影片 |
-| 影片處理 | 檢查時長、格式並預處理影片 |
-| 多平台發佈 | 支援小紅書、Bilibili、抖音、視頻號與 YouTube |
-| 快取系統 | 透過結果快取提升處理效率 |
-| 檔案同步 | 處理系統間檔案移動與同步 |
-| 集中式設定 | 所有路徑與參數集中於單一設定檔 |
-| 易於安裝 | 使用單一腳本完成整套系統安裝 |
-| 影片相容性修復 | 使用 FFmpeg 檢查，必要時可回退至 HandBrakeCLI |
-| 服務化運行 | `tmux` 工作階段 + 可選 `systemd` 服務 |
+| 運行模型 | Linux 優先的自動化，使用 `tmux`、可選擇的 `systemd`，並以隊列鎖進行管控 |
+| 佇列設計 | 檔案監視器 → 佇列 → worker 迴圈，並進行持續狀態追蹤 |
+| 可延展性 | Shell 編排 + 平台適配器的 Python 發布客戶端 |
+| 核心入口點 | `autopub_monitor_tmux_session.sh`, `autopub.sh`, `autopub.py` |
 
-## 儲存庫結構
+---
+
+## 🧭 Documentation Map
+
+| Section | Why it matters |
+|---|---|
+| [Project at a Glance](#project-at-a-glance) | 快速理解執行模型與目標 |
+| [Installation](#installation) | 從 clone 到服務啟用 |
+| [Configuration](#configuration) | 瞭解每個重要的腳本層設定 |
+| [Usage](#usage) | 啟動、停止、佇列與處理流程 |
+| [System Components](#system-components) | 區分 Shell 與 Python 的責任劃分 |
+| [Troubleshooting](#troubleshooting) | 快速排查啟動與佇列問題 |
+| [Roadmap](#roadmap) | 追蹤近期平台與工具規劃 |
+| [Contributing](#contributing) | 掌握安全的貢獻方式 |
+
+## 🧭 Quick Start at a Glance
+
+| Goal | Command | Notes |
+|---|---|---|
+| Start monitoring pipeline | `./autopub_monitor/autopub_monitor_tmux_session.sh start` | 啟動監控、佇列、同步與手動面板 |
+| Stop all services | `./autopub_monitor/autopub_monitor_tmux_session.sh stop` | 優雅停機並清理面板 |
+| Queue by pattern | `./autopub_monitor/queue_file_utility.sh "pattern"` | 將符合條件的檔案加入處理佇列 |
+| Process one file | `./autopub_monitor/autopub.sh "/path/to/video.mp4"` | 使用預設的發布與處理設定 |
+
+## 🎯 Project at a Glance
+
+| Focus | Details |
+|---|---|
+| 運行目標 | Linux，使用 `tmux` 編排與可選 `systemd` |
+| 佇列模型 | 檔案監視器 → 佇列 → worker 腳本 → 發布流程 |
+| 核心入口點 | `autopub_monitor_tmux_session.sh`, `autopub.py`, `autopub.config` |
+| 狀態追蹤 | `queue_list.txt`, `queue.lock`, `processed.csv`, `videos_db.csv` |
+
+## 🔎 Overview
+
+AutoPubMonitor 是一個面向 Linux 的影片內容處理與多平台發布自動化流程。系統會監控新影片檔案，經過相容性修復、選用的增強處理、透過 API 的轉錄/翻譯相關流程，並將結果發布到已設定的平台。
+
+執行時由 Shell 協調（`tmux`、`inotifywait`、`rsync`、`flock`）驅動，搭配 Python 處理客戶端與以 CSV/文字為基礎的狀態追蹤。
+
+## ⚡ Key Features
+
+| Capability | Details |
+|---|---|
+| 自動檔案偵測 | 監控目錄中的新影片內容 |
+| 佇列管理 | 以可控、順序化方式處理影片 |
+| 影片處理 | 檢查長度與格式，並預先整理影片 |
+| 多平台發布 | 支援 XiaoHongShu、Bilibili、Douyin、ShiPinHao 與 YouTube |
+| 快取機制 | 透過快取結果提升處理效率 |
+| 檔案同步 | 在不同系統/目錄間移動檔案 |
+| 集中化設定 | 所有路徑與設定集中在單一設定檔 |
+| 簡易安裝 | 單一腳本可完成整套系統安裝 |
+| 影片相容性修復 | 使用 FFmpeg 檢查，並在需要時退回 HandBrakeCLI |
+| 服務導向運作 | `tmux` 會話 + 可選 `systemd` 服務 |
+| 國際化文件 | 根目錄語系連結與 `i18n/` 翻譯 |
+
+## 🗂️ Repository Structure
 
 ```text
 autopub-monitor/
@@ -70,56 +114,56 @@ autopub-monitor/
     └── window_info_utility.py
 ```
 
-## 系統元件
+## System Components
 
-### 核心處理
+### Core Processing
 
-| 元件 | 角色 |
+| Component | Role |
 |---|---|
-| `autopub.py` | 主處理引擎，負責上傳/處理/發佈流程協調 |
-| `process_video.py` | 影片處理客戶端，執行上傳、處理與結果收斂 |
-| `video_utils.py` / `handbrake.py` | 上傳前進行相容性檢查與修復 |
+| `autopub.py` | 主處理引擎，負責上傳、處理與發布的整體編排 |
+| `process_video.py` | 上傳、處理與結果處理的影片處理客戶端 |
+| `video_utils.py` / `handbrake.py` | 上傳前的相容性檢查與修復 |
 
-### 佇列管理
+### Queue Management
 
-| 元件 | 角色 |
+| Component | Role |
 |---|---|
-| `process_queue.sh` | 具 `flock` 鎖定與重試迴圈的佇列消費器 |
-| `queue_file_utility.sh` | 透過路徑或檔名模式手動加入佇列 |
+| `process_queue.sh` | 以 `flock` 鎖定消費佇列並進行重試循環 |
+| `queue_file_utility.sh` | 依路徑或檔名模式手動注入佇列 |
 
-### 服務管理
+### Service Management
 
-| 元件 | 角色 |
+| Component | Role |
 |---|---|
-| `autopub_monitor_tmux_session.sh` | 啟動/停止多面板 tmux 服務 |
-| `autopub.sh` | `autopub.py` 的 conda/bootstrap 包裝器 |
-| `autopub_sync.sh` | 從 Nutstore/堅果雲路徑同步檔案 |
-| `monitor_autopublish.sh` | 監看新檔並排入佇列的 `inotify` 監聽器 |
+| `autopub_monitor_tmux_session.sh` | 啟動/停止多窗格 tmux 服務 |
+| `autopub.sh` | `autopub.py` 的 conda/bootstrap 包裝 |
+| `autopub_sync.sh` | 從遠端/同步來源目錄同步檔案 |
+| `monitor_autopublish.sh` | 用於新檔案監測與佇列的 `inotify` 監看器 |
 
-### 工具
+### Utilities
 
-| 元件 | 角色 |
+| Component | Role |
 |---|---|
-| `window_info_utility.py` | 使用 `xdotool` 的前景視窗工具（可選） |
-| `autopub.config` | 集中式設定檔 |
-| `install_autopub_monitor.sh` | 安裝與 systemd 設定輔助腳本 |
+| `window_info_utility.py` | 使用 `xdotool` 的作用中視窗工具（可選） |
+| `autopub.config` | 集中設定檔 |
+| `install_autopub_monitor.sh` | 安裝與 `systemd` 設定輔助程式 |
 
-## 先決條件
+## Prerequisites
 
-| 需求 | 備註 |
+| Requirement | Notes |
 |---|---|
 | Linux 環境與 bash | 主要執行目標 |
-| Python 3.8+ | 安裝器目前建立 Python 3.8 conda 環境 |
-| 位於 `${HOME}/miniconda3` 的 Miniconda | 腳本預設路徑 |
-| `ffmpeg` / `ffprobe` | 影片驗證/處理必要工具 |
-| `tmux` | 服務流程協調 |
+| Python 3.8+ | 安裝腳本目前會建立 Python 3.8 conda 環境 |
+| `${HOME}/miniconda3` 中的 Miniconda | 腳本預設期待的安裝路徑 |
+| `ffmpeg` / `ffprobe` | 影片驗證/處理必要套件 |
+| `tmux` | 服務編排 |
 | `inotify-tools` | 檔案事件監控（`inotifywait`） |
-| `rsync` | 目錄/系統間同步 |
-| `python3-pip` | Python 套件安裝 |
+| `rsync` | 目錄或系統間同步 |
+| `python3-pip` | 安裝 Python 套件 |
 | 可選：`HandBrakeCLI` | 建議用於修復有問題的影片 |
 | 可選：`xdotool` | `window_info_utility.py` 需要 |
 
-儲存庫腳本使用的 Python 套件包含：
+Python 套件（本專案腳本有使用）：
 
 - `requests`
 - `requests_toolbelt`
@@ -127,11 +171,11 @@ autopub-monitor/
 - `tqdm`
 - `numpy`
 
-## 安裝
+## Installation
 
-### 🚀 自動安裝（腳本化）
+### 🚀 Automatic Installation (scripted)
 
-在儲存庫根目錄執行：
+在專案根目錄執行：
 
 ```bash
 cd autopub_monitor
@@ -142,21 +186,21 @@ chmod +x install_autopub_monitor.sh
 安裝器會：
 
 - 安裝 apt 依賴（`tmux`、`inotify-tools`、`ffmpeg`、`python3-pip`）
-- 建立/使用 conda 環境 `autopub-video`
-- 安裝 Python 套件（`requests`、`requests_toolbelt`、`selenium`）
-- 建立執行期目錄與狀態檔
+- 建立或使用 conda 環境 `autopub-video`
+- 安裝 Python 套件（`requests`, `requests_toolbelt`, `selenium`）
+- 建立運行目錄與狀態檔
 - 安裝並啟用 `autopub-monitor.service`
 
-### 🧩 啟用/啟動服務（若安裝器尚未啟用）
+### 🧩 Service Enable/Start (if not already enabled by installer)
 
 ```bash
 sudo systemctl enable autopub-monitor.service
 sudo systemctl start autopub-monitor.service
 ```
 
-### 🛠️ 手動設定
+### 🛠️ Manual Setup
 
-1. 依你的環境檢查並修改 `autopub_monitor/autopub.config`。
+1. 檢查並修改 `autopub_monitor/autopub.config` 以符合你的執行環境。
 2. 建立並啟用環境：
 
 ```bash
@@ -165,35 +209,38 @@ conda activate autopub-video
 pip install requests requests_toolbelt selenium tqdm numpy
 ```
 
-3. 為腳本加入可執行權限：
+3. 讓腳本可執行：
 
 ```bash
 chmod +x autopub_monitor/*.sh
 ```
 
-## 設定
+> 假設：實際運行用到的狀態檔（例如 `queue.lock`, `temp_queue.txt`, `checked_list.txt`）應已存在，或在啟動/安裝流程中建立。
+
+## Configuration
 
 主要設定檔：`autopub_monitor/autopub.config`
 
-重要設定包含：
+重要設定包括：
 
-- 資料目錄：`AUTOPUBLISH_DIR`、`TRANSCRIPTION_DIR`、`PREPROCESSED_VIDEOS_DIR`
+- 資料目錄：`AUTOPUBLISH_DIR`, `TRANSCRIPTION_DIR`, `PREPROCESSED_VIDEOS_DIR`
 - 同步來源目錄：`JIANGUOYUN_*`
-- 狀態檔：`QUEUE_LIST`、`TEMP_QUEUE`、`CHECKED_LIST`、`VIDEOS_DB_PATH`、`PROCESSED_PATH`
-- 鎖檔：`QUEUE_LOCK`、`AUTOPUB_LOCK`
-- API 設定：`USE_APP_API`、`APP_API_BASE_URL`、`UPLOAD_URL`、`PROCESS_URL`、`PUBLISH_URL`
-- Conda 設定：`CONDA_ENV`、`CONDA_DIR`、`CONDA_ACTIVATE`
+- 狀態檔：`QUEUE_LIST`, `TEMP_QUEUE`, `CHECKED_LIST`, `VIDEOS_DB_PATH`, `PROCESSED_PATH`
+- 鎖檔：`QUEUE_LOCK`, `AUTOPUB_LOCK`
+- API 設定：`USE_APP_API`, `APP_API_BASE_URL`, `UPLOAD_URL`, `PROCESS_URL`, `PUBLISH_URL`
+- Conda 設定：`CONDA_ENV`, `CONDA_DIR`, `CONDA_ACTIVATE`
 
 備註：
 
-- 預設設定目前偏好 app API 模式（`USE_APP_API="true"`），並由 `APP_API_BASE_URL` 組合各端點 URL。
-- 舊版端點仍保留於設定檔中供參考。
+- 預設設定目前偏好 app API 模式（`USE_APP_API="true"`），並由 `APP_API_BASE_URL` 拼接 endpoint URL。
+- 歷史 endpoint 仍保留在設定檔中作為參考。
+- 只要所有腳本引用的是同一個設定鍵，佇列與鎖檔檔名可以低風險調整。
 
-## 使用方式
+## Usage
 
-### ▶️ 啟動服務
+### ▶️ Start Services
 
-在儲存庫根目錄執行：
+在專案根目錄執行：
 
 ```bash
 ./autopub_monitor/autopub_monitor_tmux_session.sh start
@@ -202,47 +249,47 @@ chmod +x autopub_monitor/*.sh
 此命令會啟動：
 
 - 檔案同步服務
-- 目錄監看服務
+- 目錄監視服務
 - 佇列處理服務
 - 手動命令面板
 - 轉錄 rsync 工作階段（`am-transcription-sync`）
 
-### ⏹️ 停止服務
+### ⏹️ Stop Services
 
 ```bash
 ./autopub_monitor/autopub_monitor_tmux_session.sh stop
 ```
 
-### 📥 手動佇列管理
+### 📥 Manual Queue Management
 
 ```bash
-# Add by pattern match
+# 依樣式新增
 ./autopub_monitor/queue_file_utility.sh "pattern_to_match"
 
-# Add by full path
+# 以完整路徑新增
 ./autopub_monitor/queue_file_utility.sh "/full/path/to/video.mp4"
 
-# Add with auto-confirmation (no selection prompt)
+# 自動確認新增（不顯示選取提示）
 ./autopub_monitor/queue_file_utility.sh -y "pattern_to_match"
 ```
 
-### 🎬 手動影片處理
+### 🎬 Manual Video Processing
 
 ```bash
-# Process a specific file using wrapper defaults
+# 使用 wrapper 預設參數處理單一檔案
 ./autopub_monitor/autopub.sh "/path/to/video.mp4"
 
-# Direct CLI with specific publish targets
+# 指定發布目標進行直接 CLI 呼叫
 python autopub_monitor/autopub.py --pub-xhs --pub-bilibili --path "/path/to/video.mp4"
 
-# Caching options + progress visualization
+# 快取選項與進度視覺化
 python autopub_monitor/autopub.py --use-cache --use-translation-cache --use-metadata-cache --path "/path/to/video.mp4" -v
 
-# Upload/process without publishing
+# 上傳/處理但不發布
 python autopub_monitor/autopub.py --no-pub --path "/path/to/video.mp4"
 ```
 
-## CLI 選項（`autopub.py`）
+## CLI Options (`autopub.py`)
 
 ```text
 --pub-xhs
@@ -260,54 +307,64 @@ python autopub_monitor/autopub.py --no-pub --path "/path/to/video.mp4"
 -v, --verbose
 ```
 
-行為說明：
+Behavior note:
 
-- 在 app API 模式（`USE_APP_API=true`）下，預設不會執行發佈，除非明確傳入發佈旗標。
+- 在 app API 模式（`USE_APP_API=true`）下，若未明確傳入發布參數，預設不會發布。
 
-## 處理架構
+## 🎛️ Command Palette
 
-1. **檔案偵測**：`monitor_autopublish.sh` 監看 `close_write`/`moved_to` 事件。
-2. **佇列**：有效檔案透過 `flock` 附加到 `queue_list.txt`。
+| Area | Examples |
+|---|---|
+| 服務控制 | `autopub_monitor_tmux_session.sh start/stop` |
+| 佇列操作 | `queue_file_utility.sh`, `process_queue.sh` |
+| 檔案同步/處理 | `autopub_sync.sh`, `autopub.sh`, `monitor_autopublish.sh` |
+| Python 執行路徑 | `autopub.py`, `process_video.py`, `video_utils.py` |
+
+## Processing Architecture
+
+1. **檔案偵測**：`monitor_autopublish.sh` 監聽 `close_write`/`moved_to` 事件。
+2. **佇列化**：有效檔案使用 `flock` 追加到 `queue_list.txt`。
 3. **處理**：`process_queue.sh` 消費佇列項目並呼叫 `autopub.sh`。
-4. **上傳/處理/發佈**：`autopub.py` 與 `process_video.py` 呼叫已配置 API 端點。
+4. **上傳/處理/發布**：`autopub.py` 與 `process_video.py` 呼叫設定好的 API 端點。
 5. **追蹤**：已處理檔案寫入 `processed.csv`，已發現檔案寫入 `videos_db.csv`。
 
-## 實務範例
+## Practical Examples
 
-### 範例 1：端到端常駐模式 🧪
+### Example 1: End-to-end daemon mode 🧪
 
 ```bash
 ./autopub_monitor/autopub_monitor_tmux_session.sh start
 ```
 
-接著將影片放入（或同步到）你設定的來源目錄，並在 tmux 面板中觀察日誌。
+接著將影片放入或同步到你設定的來源目錄，並在 tmux 面板中查看日誌。
 
-### 範例 2：強制重跑符合條件檔案 🔁
+### Example 2: Force re-run matching files 🔁
 
 ```bash
 python autopub_monitor/autopub.py --force "keyword1,keyword2" --use-cache --use-translation-cache --use-metadata-cache -v
 ```
 
-### 範例 3：本地測試且不發佈 🧷
+### Example 3: Local test without publish 🧷
 
 ```bash
 python autopub_monitor/autopub.py --no-pub --test --path "/path/to/video.mp4"
 ```
 
-## 開發說明
+## 🧠 Development Notes
 
-- 儲存庫根目錄目前沒有固定版本依賴清單（`requirements.txt` / `pyproject.toml`）。
-- 執行期高度依賴 Linux shell 工具與本機路徑慣例。
-- 目前腳本會動態載入 shell 設定（`autopub.config`）；請保持 shell 相容的變數表達式。
-- 佇列與鎖定語義依賴 `flock`；避免進行會削弱原子化佇列更新的修改。
-- API 合約細節由客戶端程式推斷而來；伺服器實作不在此儲存庫中。
-- `i18n/` 目錄已存在；本次循環已開始補齊多語 README。
+- 專案根目錄未提供固定版本管理的依賴清單（`requirements.txt` / `pyproject.toml`）。
+- 執行期高度依賴 Linux Shell 工具與本機路徑慣例。
+- 目前腳本會動態讀取 shell 設定（`autopub.config`）；請保留 Shell 相容的變數表示法。
+- 佇列與鎖的語義依賴 `flock`，避免進行會削弱原子性更新佇列的修改。
+- API 合約細節從客戶端程式推斷；伺服器實作位於本儲存庫外部。
+- `i18n/` 目錄存在，但目前這個版本的翻譯文件尚未完全維護。
+- 已處理檔案等中介產物（`queue_list.txt`、`temp_queue.txt` 等）通常在執行時建立/管理，於不同環境間可能有差異。
 
-## 舊名稱相容性（保留）
+## 🧱 Legacy Name Compatibility (Preserved)
 
-先前文件使用過重新命名的元件標籤；目前儲存庫實際檔名如下。
+先前文件曾使用重新命名後的元件標籤。以下為目前版本的實際檔案名稱。
 
-| 舊文件標籤 | 目前儲存庫檔案 |
+| Earlier docs label | Current repository file |
 |---|---|
 | `video_processor_core.py` | `autopub.py` |
 | `video_processing_client.py` | `process_video.py` |
@@ -317,10 +374,10 @@ python autopub_monitor/autopub.py --no-pub --test --path "/path/to/video.mp4"
 | `file_sync_service.sh` | `autopub_sync.sh` |
 | `file_watcher_service.sh` | `monitor_autopublish.sh` |
 
-為了方便起見，若你先 `cd autopub_monitor`，舊文件風格的以下指令仍可對應使用：
+如在 `cd autopub_monitor` 後，舊文件中的命令可對應為：
 
 ```bash
-# Older docs style (equivalent location-dependent commands)
+# 舊文件寫法（對應現行同位置命令）
 ./autopub_monitor_tmux_session.sh start
 ./autopub_monitor_tmux_session.sh stop
 ./queue_file_utility.sh "pattern_to_match"
@@ -329,56 +386,59 @@ python autopub.py --pub-xhs --pub-bilibili --path "/path/to/video.mp4"
 python autopub.py --use-cache --use-translation-cache --path "/path/to/video.mp4" -v
 ```
 
-## 疑難排解
+## 🛠️ Troubleshooting
 
-| 症狀 | 建議檢查項目 |
+| Symptom | What to check |
 |---|---|
-| `Miniconda not found at ~/miniconda3` | 安裝 Miniconda，或更新 `autopub.config` 內的 `CONDA_DIR`。 |
+| `Miniconda not found at ~/miniconda3` | 安裝 Miniconda，或更新 `autopub.config` 中的 `CONDA_DIR`。 |
 | `inotifywait: command not found` | 安裝 `inotify-tools`。 |
-| `ffprobe`/`ffmpeg` failures | 安裝 `ffmpeg`，並確認輸入檔案完整性。 |
-| 影片反覆未進入佇列 | 檢查 `checked_list.txt`、`temp_queue.txt`，並查看 `monitor_autopublish.sh` 日誌。 |
-| 佇列卡住或疑似競態 | 檢查 `queue.lock`、`queue_list.txt`，以及使用 `flock` 的相關進程。 |
-| API upload/process/publish errors | 驗證 `autopub.config` 中的 `APP_API_BASE_URL` 與端點路徑。 |
-| tmux service not starting | 確認 `tmux has-session` 可運作，且腳本已具可執行權限。 |
+| `ffprobe`/`ffmpeg` failures | 安裝 `ffmpeg`，並驗證輸入檔完整性。 |
+| 影片反覆未入佇列 | 檢查 `checked_list.txt`、`temp_queue.txt`，以及 `monitor_autopublish.sh` 的監控日誌。 |
+| Queue stuck or race concerns | 檢查 `queue.lock`、`queue_list.txt`，並用 `flock` 檢查活躍程序。 |
+| API upload/process/publish errors | 確認 `APP_API_BASE_URL` 與 `autopub.config` 內的端點路徑。 |
+| tmux service not starting | 確認 `tmux has-session` 可執行，並確認腳本具備執行權限。 |
 
-## 路線圖
+## 🗺️ Roadmap
 
-- 增加固定版本依賴管理（`requirements.txt` 或 `pyproject.toml`）。
-- 增加 shell/Python lint 與基本整合測試的 CI 檢查。
-- 補上 API 合約與部署假設的文件。
-- 擴充 `i18n/` 並維護多語 README。
-- 強化可觀測性（結構化日誌與健康檢查）。
+- 新增固定依賴管理（`requirements.txt` 或 `pyproject.toml`）。
+- 新增 shell/Python lint 與基礎整合測試的 CI。
+- 補強 API 合約與部署假設文件。
+- 擴充 `i18n/`，維護更多完整翻譯的 README。
+- 改善可觀測性（結構化日誌與健康檢查）。
 
-## 貢獻
+## 🤝 Contributing
 
 歡迎貢獻。
 
-建議流程：
+Recommended workflow:
 
 1. Fork 並建立功能分支。
-2. 讓變更保持小而聚焦（建議腳本與文件同步更新）。
-3. 於具備必要系統工具的 Linux 環境驗證。
-4. 提交 Pull Request，並附上清楚的重現/測試說明。
+2. 保持變更小且集中（腳本與文件同步更新）。
+3. 在具備必要系統工具的 Linux 環境中進行驗證。
+4. 提交 Pull Request 時附上清楚的重現步驟與測試紀錄。
 
 若行為有變更，請同步更新：
 
 - `README.md`
-- `PROJECT_STRUCTURE.md` 及/或 `autopub_monitor/README.md`
+- `PROJECT_STRUCTURE.md` 和／或 `autopub_monitor/README.md`
 
-## 支援與贊助
+## ❤️ Support
 
-- GitHub Sponsors: https://github.com/sponsors/lachlanchen
-- Website: https://lazying.art
-- Community chat: https://chat.lazying.art
-- Ideas hub: https://onlyideas.art
+| Donate | PayPal | Stripe |
+| --- | --- | --- |
+| [![Donate](https://camo.githubusercontent.com/24a4914f0b42c6f435f9e101621f1e52535b02c225764b2f6cc99416926004b7/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f446f6e6174652d4c617a79696e674172742d3045413545393f7374796c653d666f722d7468652d6261646765266c6f676f3d6b6f2d6669266c6f676f436f6c6f723d7768697465)](https://chat.lazying.art/donate) | [![PayPal](https://camo.githubusercontent.com/d0f57e8b016517a4b06961b24d0ca87d62fdba16e18bbdb6aba28e978dc0ea21/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f50617950616c2d526f6e677a686f754368656e2d3030343537433f7374796c653d666f722d7468652d6261646765266c6f676f3d70617970616c266c6f676f436f6c6f723d7768697465)](https://paypal.me/RongzhouChen) | [![Stripe](https://camo.githubusercontent.com/1152dfe04b6943afe3a8d2953676749603fb9f95e24088c92c97a01a897b4942/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f5374726970652d446f6e6174652d3633354246463f7374796c653d666f722d7468652d6261646765266c6f676f3d737472697065266c6f676f436f6c6f723d7768697465)](https://buy.stripe.com/aFadR8gIaflgfQV6T4fw400) |
 
-（來源：`.github/FUNDING.yml`）
+## 📬 Contact
 
-## 致謝
+有問題、錯誤回報與功能需求：
 
-- 系統以 Linux 原生工具（`tmux`、`inotify`、`rsync`、`ffmpeg`）為核心，提供可靠的長時間自動化能力。
-- 感謝所有貢獻者與使用者持續支持改進。
+- 前往 [github.com/lachlanchen/AutoPubMonitor/issues](https://github.com/lachlanchen/AutoPubMonitor/issues) 開單
 
-## 授權
+## 🙌 Acknowledgements
 
-Apache License 2.0 - 詳見 [LICENSE](LICENSE)。
+- 以 Linux 原生工具為基礎（`tmux`、`inotify`、`rsync`、`ffmpeg`）打造穩定長時自動化。
+- 感謝所有持續支持改進的貢獻者與使用者。
+
+## 📄 License
+
+Apache License 2.0 - 詳情請參閱 [LICENSE](LICENSE)。

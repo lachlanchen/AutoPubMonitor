@@ -1,10 +1,7 @@
 [English](../README.md) · [العربية](README.ar.md) · [Español](README.es.md) · [Français](README.fr.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Tiếng Việt](README.vi.md) · [中文 (简体)](README.zh-Hans.md) · [中文（繁體）](README.zh-Hant.md) · [Deutsch](README.de.md) · [Русский](README.ru.md)
 
 
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/lachlanchen/lachlanchen/main/logos/banner.png" alt="LazyingArt banner" />
-</p>
+[![LazyingArt banner](https://github.com/lachlanchen/lachlanchen/raw/main/figs/banner.png)](https://github.com/lachlanchen/lachlanchen/blob/main/figs/banner.png)
 
 # AutoPubMonitor
 
@@ -12,32 +9,79 @@
 [![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey)](#voraussetzungen)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](#voraussetzungen)
 [![Service](https://img.shields.io/badge/runtime-tmux%20%2B%20systemd-2ea44f)](#verwendung)
+[![Monitors](https://img.shields.io/badge/monitoring-inotifywait-0ea5e9)](#verwendung)
+[![Queueing](https://img.shields.io/badge/queue-flock-16a34a)](#systemkomponenten)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa)](https://github.com/sponsors/lachlanchen)
+[![Activity](https://img.shields.io/github/last-commit/lachlanchen/AutoPubMonitor?style=flat-square&label=last%20commit&color=1d76db)](https://github.com/lachlanchen/AutoPubMonitor/commits/main)
+[![Repo Size](https://img.shields.io/github/repo-size/lachlanchen/AutoPubMonitor?style=flat-square&color=0366d6)](https://github.com/lachlanchen/AutoPubMonitor)
+[![Issues](https://img.shields.io/github/issues/lachlanchen/AutoPubMonitor?style=flat-square)](https://github.com/lachlanchen/AutoPubMonitor/issues)
+[![Contributors](https://img.shields.io/github/contributors/lachlanchen/AutoPubMonitor?style=flat-square)](https://github.com/lachlanchen/AutoPubMonitor/graphs/contributors)
 
-Ein automatisiertes System zur Überwachung, Verarbeitung und Veröffentlichung von Videoinhalten auf mehreren Plattformen.
+> Automatisiertes System für die Überwachung, Verarbeitung und Veröffentlichung von Videoinhalten auf mehreren Plattformen.
 
-## Überblick
+| Was zu erwarten ist | Details |
+|---|---|
+| Ausführungsmodell | Linux-zentrierte Automatisierung mit `tmux`, optionalem `systemd` und Queue-Locks |
+| Queue-Design | Dateiwächter → Queue → Worker-Schleife mit persistenter Statusverfolgung |
+| Erweiterbarkeit | Shell-Orchestrierung + Python-Publish-Clients für Plattform-Adapter |
+| Kerneinstiegspunkte | `autopub_monitor_tmux_session.sh`, `autopub.sh`, `autopub.py` |
 
-AutoPubMonitor ist eine Linux-orientierte Automatisierungs-Pipeline für die Videobearbeitung und Multi-Plattform-Veröffentlichung. Das System überwacht neue Videodateien, verarbeitet sie über Schritte wie Kompatibilitätsreparatur, optionale Erweiterung, transkriptions-/übersetzungsbezogene Verarbeitung per API und veröffentlicht die Ergebnisse auf konfigurierten Plattformen.
+---
 
-Die Laufzeit wird per Shell orchestriert (`tmux`, `inotifywait`, `rsync`, `flock`) mit Python-Verarbeitungsclients sowie CSV-/Text-Zustandsverfolgung.
+## 🧭 Dokumentationsübersicht
 
-## Hauptfunktionen
+| Abschnitt | Warum wichtig |
+|---|---|
+| [Projekt auf einen Blick](#projekt-auf-einen-blick) | Laufzeitmodell und Ziele schnell verstehen |
+| [Installation](#installation) | Von `clone` bis laufendem Service |
+| [Konfiguration](#konfiguration) | Alle wichtigen Schalter auf Skriptebene kennen |
+| [Verwendung](#verwendung) | Starten, Stoppen, Queue und Verarbeitung steuern |
+| [Systemkomponenten](#systemkomponenten) | Shell- und Python-Verantwortlichkeiten trennen |
+| [Fehlerbehebung](#fehlerbehebung) | Start- und Queue-Probleme schnell lösen |
+| [Roadmap](#roadmap) | Kurzfristige Plattform- und Tooling-Pläne verfolgen |
+| [Mitwirken](#mitwirken) | Sichere Beitragspfade verstehen |
+
+## 🧭 Schnellstart auf einen Blick
+
+| Ziel | Befehl | Hinweise |
+|---|---|---|
+| Überwachungs-Pipeline starten | `./autopub_monitor/autopub_monitor_tmux_session.sh start` | Startet Watcher + Queue + Sync + manuelles Pane |
+| Alle Dienste beenden | `./autopub_monitor/autopub_monitor_tmux_session.sh stop` | Sauberes Herunterfahren und Bereinigung der Panes |
+| Dateien per Muster in die Queue schreiben | `./autopub_monitor/queue_file_utility.sh "pattern"` | Fügt passende Dateien der Verarbeitungsqueue hinzu |
+| Eine Datei verarbeiten | `./autopub_monitor/autopub.sh "/path/to/video.mp4"` | Verwendet Standard-Publishing und -Verarbeitung |
+
+## 🎯 Projekt auf einen Blick
+
+| Fokus | Details |
+|---|---|
+| Laufzeitziel | Linux mit `tmux`-Orchestrierung und optionalem `systemd` |
+| Queue-Modell | Dateiwächter → Queue → Worker-Skripte → Publishing-Pipeline |
+| Kerneinstiegspunkte | `autopub_monitor_tmux_session.sh`, `autopub.py`, `autopub.config` |
+| Statusverfolgung | `queue_list.txt`, `queue.lock`, `processed.csv`, `videos_db.csv` |
+
+## 🔎 Überblick
+
+AutoPubMonitor ist eine Linux-orientierte Automatisierungspipeline für die Videobearbeitung und Multi-Plattform-Veröffentlichung. Das System überwacht neue Videodateien, verarbeitet diese in mehreren Schritten wie Kompatibilitätsreparatur, optionaler Erweiterung, transkriptions-/übersetzungsbezogener Verarbeitung über API und veröffentlicht anschließend die Ergebnisse auf den konfigurierten Plattformen.
+
+Die Laufzeit ist shell-orchestriert (`tmux`, `inotifywait`, `rsync`, `flock`) mit Python-Verarbeitungstools und CSV/Text-basierter Statusverfolgung.
+
+## ⚡ Zentrale Funktionen
 
 | Fähigkeit | Details |
 |---|---|
 | Automatische Dateierkennung | Überwacht Verzeichnisse auf neue Videoinhalte |
-| Verarbeitungswarteschlange | Verarbeitet Videos kontrolliert und sequenziell |
-| Videobearbeitung | Prüft Länge, Formate und bereitet Videos auf |
-| Multi-Plattform-Veröffentlichung | Unterstützt XiaoHongShu, Bilibili, Douyin, ShiPinHao und YouTube |
-| Caching-System | Optimiert die Verarbeitung durch Zwischenspeicherung |
-| Dateisynchronisierung | Bewegt Dateien zwischen Systemen |
-| Zentrale Konfiguration | Alle Pfade und Einstellungen in einer Konfigurationsdatei |
-| Einfache Installation | Ein einzelnes Skript richtet das gesamte System ein |
+| Queue-Management | Verarbeitet Videos kontrolliert und sequenziell |
+| Videobearbeitung | Prüft Länge, Formate und bereitet Videos vor |
+| Multi-Plattform-Publishing | Unterstützt XiaoHongShu, Bilibili, Douyin, ShiPinHao und YouTube |
+| Caching-System | Optimiert Verarbeitung durch Caching |
+| Dateisynchronisierung | Überführt Dateien zwischen Systemen |
+| Zentrale Konfiguration | Alle Pfade und Einstellungen in einer einzigen Konfigurationsdatei |
+| Einfache Installation | Einzelnes Skript für die komplette Einrichtung |
 | Video-Kompatibilitätsreparatur | Nutzt FFmpeg-Prüfungen und optionales HandBrakeCLI-Fallback |
 | Service-orientierter Betrieb | `tmux`-Sitzungen + optionaler `systemd`-Service |
+| Internationale Dokumentation | Sprachlinks in der Wurzel und Übersetzungen unter `i18n/` |
 
-## Repository-Struktur
+## 🗂️ Repository-Struktur
 
 ```text
 autopub-monitor/
@@ -76,31 +120,31 @@ autopub-monitor/
 
 | Komponente | Rolle |
 |---|---|
-| `autopub.py` | Hauptverarbeitungs-Engine für die Orchestrierung von Upload/Verarbeitung/Veröffentlichung |
-| `process_video.py` | Videobearbeitungs-Client für Upload, Verarbeitung und Ergebnisbehandlung |
+| `autopub.py` | Hauptverarbeitungs-Engine für Upload/Verarbeitung/Publishing-Orchestrierung |
+| `process_video.py` | Videoverarbeitungs-Client für Upload, Verarbeitung und Ergebnisbehandlung |
 | `video_utils.py` / `handbrake.py` | Kompatibilitätsprüfungen und Reparaturen vor dem Upload |
 
 ### Queue-Management
 
 | Komponente | Rolle |
 |---|---|
-| `process_queue.sh` | Queue-Consumer mit `flock`-Locking und Retry-Schleife |
-| `queue_file_utility.sh` | Manueller Queue-Feeder per Pfad oder Dateinamenmuster |
+| `process_queue.sh` | Queue-Verbraucher mit `flock`-Sperre und Retry-Schleife |
+| `queue_file_utility.sh` | Manuelle Queue-Einspielung per Pfad oder Dateinamenmuster |
 
 ### Service-Management
 
 | Komponente | Rolle |
 |---|---|
-| `autopub_monitor_tmux_session.sh` | Startet/stoppt Multi-Pane-`tmux`-Services |
-| `autopub.sh` | Conda-/Bootstrap-Wrapper für `autopub.py` |
-| `autopub_sync.sh` | Dateisynchronisierung aus Nutstore-/Jianguoyun-Pfad |
+| `autopub_monitor_tmux_session.sh` | Startet/stoppt mehrteilige tmux-Dienste |
+| `autopub.sh` | Conda/Bootstrap-Wrapper für `autopub.py` |
+| `autopub_sync.sh` | Dateisynchronisation aus synchronisierten Quellen |
 | `monitor_autopublish.sh` | `inotify`-Watcher für neue Dateien und Queueing |
 
-### Hilfswerkzeuge
+### Hilfsprogramme
 
 | Komponente | Rolle |
 |---|---|
-| `window_info_utility.py` | Utility für aktives Fenster mit `xdotool` (optional) |
+| `window_info_utility.py` | Aktive Fenster-Utility mit `xdotool` (optional) |
 | `autopub.config` | Zentrale Konfigurationsdatei |
 | `install_autopub_monitor.sh` | Installations- + systemd-Setup-Helfer |
 
@@ -109,17 +153,17 @@ autopub-monitor/
 | Anforderung | Hinweise |
 |---|---|
 | Linux-Umgebung mit bash | Primäres Laufzeitziel |
-| Python 3.8+ | Der Installer erstellt derzeit eine Python-3.8-Conda-Umgebung |
-| Miniconda unter `${HOME}/miniconda3` | Standardpfad, den Skripte erwarten |
-| `ffmpeg` / `ffprobe` | Erforderlich für Videovalidierung/-verarbeitung |
+| Python 3.8+ | Installer erstellt derzeit eine Python-3.8-Conda-Umgebung |
+| Miniconda in `${HOME}/miniconda3` | Standardpfad, den Skripte erwarten |
+| `ffmpeg` / `ffprobe` | Für Video-Validierung/Verarbeitung erforderlich |
 | `tmux` | Service-Orchestrierung |
-| `inotify-tools` | Überwachung von Dateiereignissen (`inotifywait`) |
-| `rsync` | Synchronisierung zwischen Verzeichnissen/Systemen |
+| `inotify-tools` | Dateiawareness (`inotifywait`) |
+| `rsync` | Synchronisation zwischen Verzeichnissen/Systemen |
 | `python3-pip` | Installation von Python-Paketen |
 | Optional: `HandBrakeCLI` | Empfohlen zur Reparatur problematischer Videos |
 | Optional: `xdotool` | Benötigt für `window_info_utility.py` |
 
-In Repository-Skripten verwendete Python-Pakete:
+Python-Pakete, die in den Repo-Skripten verwendet werden:
 
 - `requests`
 - `requests_toolbelt`
@@ -129,9 +173,9 @@ In Repository-Skripten verwendete Python-Pakete:
 
 ## Installation
 
-### 🚀 Automatische Installation (Skript)
+### 🚀 Automatische Installation (skriptbasiert)
 
-Vom Repository-Root aus:
+Aus dem Repository-Root:
 
 ```bash
 cd autopub_monitor
@@ -147,17 +191,17 @@ Der Installer:
 - Erstellt Laufzeitverzeichnisse und Statusdateien
 - Installiert und aktiviert `autopub-monitor.service`
 
-### 🧩 Service aktivieren/starten (falls nicht bereits durch den Installer aktiviert)
+### 🧩 Service aktivieren/starten (falls der Installer ihn nicht schon aktiviert hat)
 
 ```bash
 sudo systemctl enable autopub-monitor.service
 sudo systemctl start autopub-monitor.service
 ```
 
-### 🛠️ Manuelles Setup
+### 🛠️ Manuelle Einrichtung
 
-1. Prüfe und passe `autopub_monitor/autopub.config` für deine Umgebung an.
-2. Erstelle und aktiviere die Umgebung:
+1. Prüfen und anpassen von `autopub_monitor/autopub.config` für die eigene Umgebung.
+2. Umgebung anlegen und aktivieren:
 
 ```bash
 conda create -n autopub-video python=3.8 -y
@@ -165,17 +209,19 @@ conda activate autopub-video
 pip install requests requests_toolbelt selenium tqdm numpy
 ```
 
-3. Mache Skripte ausführbar:
+3. Skripte ausführbar machen:
 
 ```bash
 chmod +x autopub_monitor/*.sh
 ```
 
+> Annahme: Die Laufzeitstatusdateien des Repos (z. B. `queue.lock`, `temp_queue.txt`, `checked_list.txt`) sollten bereits existieren oder durch Start/Installation angelegt werden.
+
 ## Konfiguration
 
-Primäre Konfigurationsdatei: `autopub_monitor/autopub.config`
+Hauptkonfigurationsdatei: `autopub_monitor/autopub.config`
 
-Wichtige Einstellungen umfassen:
+Wichtige Einstellungen:
 
 - Datenverzeichnisse: `AUTOPUBLISH_DIR`, `TRANSCRIPTION_DIR`, `PREPROCESSED_VIDEOS_DIR`
 - Sync-Quellverzeichnisse: `JIANGUOYUN_*`
@@ -186,59 +232,60 @@ Wichtige Einstellungen umfassen:
 
 Hinweise:
 
-- Die Standardkonfiguration bevorzugt derzeit den App-API-Modus (`USE_APP_API="true"`) und erzeugt Endpoint-URLs aus `APP_API_BASE_URL`.
-- Legacy-Endpoints sind weiterhin zur Referenz in der Konfiguration enthalten.
+- Standardmäßig nutzt die aktuelle Konfiguration den App-API-Modus (`USE_APP_API="true"`) und baut Endpunkt-URLs aus `APP_API_BASE_URL`.
+- Legacy-Endpunkte sind weiterhin zu Referenzzwecken in der Konfiguration enthalten.
+- Queue- und Lock-Dateinamen können mit geringem Risiko geändert werden, solange alle Skripte dieselben Konfigurationseinträge verwenden.
 
 ## Verwendung
 
-### ▶️ Services starten
+### ▶️ Dienste starten
 
-Vom Repository-Root aus:
+Aus dem Repository-Root:
 
 ```bash
 ./autopub_monitor/autopub_monitor_tmux_session.sh start
 ```
 
-Dies startet:
+Dabei werden gestartet:
 
-- Dateisynchronisierungs-Service
+- Datei-Sync-Service
 - Verzeichnis-Watcher-Service
 - Queue-Verarbeitungs-Service
 - Manuelles Befehls-Pane
-- Transkriptions-rsync-Sitzung (`am-transcription-sync`)
+- Transkriptions-Rsync-Session (`am-transcription-sync`)
 
-### ⏹️ Services stoppen
+### ⏹️ Dienste stoppen
 
 ```bash
 ./autopub_monitor/autopub_monitor_tmux_session.sh stop
 ```
 
-### 📥 Manuelles Queue-Management
+### 📥 Manuelle Queue-Verwaltung
 
 ```bash
-# Add by pattern match
+# Nach Muster hinzufügen
 ./autopub_monitor/queue_file_utility.sh "pattern_to_match"
 
-# Add by full path
+# Über vollständigen Pfad hinzufügen
 ./autopub_monitor/queue_file_utility.sh "/full/path/to/video.mp4"
 
-# Add with auto-confirmation (no selection prompt)
+# Mit automatischer Bestätigung hinzufügen (keine Auswahlabfrage)
 ./autopub_monitor/queue_file_utility.sh -y "pattern_to_match"
 ```
 
-### 🎬 Manuelle Videoverarbeitung
+### 🎬 Manuelle Videobearbeitung
 
 ```bash
-# Process a specific file using wrapper defaults
+# Eine bestimmte Datei mit Standardwerten des Wrappers verarbeiten
 ./autopub_monitor/autopub.sh "/path/to/video.mp4"
 
-# Direct CLI with specific publish targets
+# Direkte CLI mit konkreten Publish-Zielen
 python autopub_monitor/autopub.py --pub-xhs --pub-bilibili --path "/path/to/video.mp4"
 
-# Caching options + progress visualization
+# Caching-Optionen + Fortschrittsanzeige
 python autopub_monitor/autopub.py --use-cache --use-translation-cache --use-metadata-cache --path "/path/to/video.mp4" -v
 
-# Upload/process without publishing
+# Upload/Verarbeitung ohne Veröffentlichung
 python autopub_monitor/autopub.py --no-pub --path "/path/to/video.mp4"
 ```
 
@@ -260,54 +307,64 @@ python autopub_monitor/autopub.py --no-pub --path "/path/to/video.mp4"
 -v, --verbose
 ```
 
-Hinweis zum Verhalten:
+Verhaltenshinweis:
 
-- Im App-API-Modus (`USE_APP_API=true`) ist Veröffentlichen standardmäßig deaktiviert, sofern nicht explizit Publish-Flags übergeben werden.
+- Im App-API-Modus (`USE_APP_API=true`) ist Publishing standardmäßig deaktiviert, sofern keine Publish-Flags explizit übergeben werden.
 
-## Verarbeitungsarchitektur
+## 🎛️ Kommandopalette
 
-1. **Dateierkennung**: `monitor_autopublish.sh` überwacht `close_write`-/`moved_to`-Ereignisse.
-2. **Queue**: Gültige Dateien werden mit `flock` an `queue_list.txt` angehängt.
-3. **Verarbeitung**: `process_queue.sh` konsumiert Queue-Einträge und ruft `autopub.sh` auf.
-4. **Upload/Verarbeitung/Veröffentlichung**: `autopub.py` und `process_video.py` rufen konfigurierte API-Endpoints auf.
-5. **Tracking**: Verarbeitete Dateien werden in `processed.csv`, erkannte Dateien in `videos_db.csv` geschrieben.
+| Bereich | Beispiele |
+|---|---|
+| Service-Steuerung | `autopub_monitor_tmux_session.sh start/stop` |
+| Queue-Operationen | `queue_file_utility.sh`, `process_queue.sh` |
+| Dateisync/Verarbeitung | `autopub_sync.sh`, `autopub.sh`, `monitor_autopublish.sh` |
+| Python-Ausführungspfad | `autopub.py`, `process_video.py`, `video_utils.py` |
+
+## Verarbeitungs-Architektur
+
+1. **Dateierkennung**: `monitor_autopublish.sh` überwacht `close_write`/`moved_to`-Ereignisse.
+2. **Queueing**: Gültige Dateien werden mit `flock` an `queue_list.txt` angehängt.
+3. **Verarbeitung**: `process_queue.sh` verarbeitet Queue-Einträge und ruft `autopub.sh` auf.
+4. **Upload/Processing/Publishing**: `autopub.py` und `process_video.py` rufen konfigurierte API-Endpunkte auf.
+5. **Tracking**: Verarbeitete Dateien werden in `processed.csv`, entdeckte Dateien in `videos_db.csv` geschrieben.
 
 ## Praktische Beispiele
 
-### Beispiel 1: End-to-End-Daemon-Modus 🧪
+### Beispiel 1: End-to-end-Daemon-Modus 🧪
 
 ```bash
 ./autopub_monitor/autopub_monitor_tmux_session.sh start
 ```
 
-Danach Videos in dein konfiguriertes Quellverzeichnis legen oder synchronisieren und die Logs in den tmux-Panes beobachten.
+Danach können Sie Videos in das konfigurierte Quellverzeichnis legen oder synchronisieren und Logs in den tmux-Panes beobachten.
 
-### Beispiel 2: Übereinstimmende Dateien erzwungen erneut ausführen 🔁
+### Beispiel 2: Erneuter Lauf passender Dateien 🔁
 
 ```bash
 python autopub_monitor/autopub.py --force "keyword1,keyword2" --use-cache --use-translation-cache --use-metadata-cache -v
 ```
 
-### Beispiel 3: Lokaler Test ohne Veröffentlichung 🧷
+### Beispiel 3: Lokaler Test ohne Publishing 🧷
 
 ```bash
 python autopub_monitor/autopub.py --no-pub --test --path "/path/to/video.mp4"
 ```
 
-## Hinweise zur Entwicklung
+## 🧠 Entwicklungshinweise
 
-- Kein fest gepinntes Abhängigkeits-Manifest (`requirements.txt` / `pyproject.toml`) im Repository-Root vorhanden.
-- Laufzeit ist stark an Linux-Shell-Tools und lokale Pfadkonventionen gebunden.
-- Aktuelle Skripte beziehen Shell-Konfiguration dynamisch (`autopub.config`); shell-kompatible Variablenausdrücke beibehalten.
-- Queue- und Lock-Semantik basiert auf `flock`; keine Änderungen vornehmen, die atomare Queue-Updates schwächen.
-- API-Vertragsdetails sind aus Client-Code abgeleitet; die Server-Implementierung liegt außerhalb dieses Repositories.
-- Das Verzeichnis `i18n/` existiert, Sprachdokumente waren in diesem Entwurfszyklus jedoch noch nicht befüllt.
+- Kein fest verankertes Dependency-Manifest (`requirements.txt` / `pyproject.toml`) im Repo-Root vorhanden.
+- Laufzeit ist eng an Linux-Shell-Tools und lokale Pfadkonventionen gebunden.
+- Aktuelle Skripte laden Shell-Konfiguration dynamisch (`autopub.config`); behalten Sie shell-kompatible Variablenausdrücke bei.
+- Queue- und Lock-Semantik stützt sich auf `flock`; vermeiden Sie Änderungen, die atomare Queue-Updates schwächen.
+- API-Vertragsdetails werden aus dem Client-Code abgeleitet; Serverimplementierung liegt außerhalb dieses Repos.
+- Das Verzeichnis `i18n/` existiert, doch die Übersetzungen werden in diesem Entwurfszyklus nicht vollständig gepflegt.
+- Generierte Artefakte (`queue_list.txt`, `temp_queue.txt` usw.) werden zur Laufzeit erstellt und können je nach Umgebung variieren.
 
-## Legacy-Namenskompatibilität (beibehalten)
+## 🧱 Legacy-Namenskompatibilität (beibehalten)
 
-Frühere Dokumentation nutzte umbenannte Komponentenbezeichnungen. Die aktuellen Dateinamen im Repository bleiben wie unten aufgeführt.
+Frühere Dokumentation nutzte andere Bezeichnungen für Komponenten. Die aktuellen Dateinamen im Repository bleiben wie unten aufgelistet.
 
-| Frühere Doku-Bezeichnung | Aktuelle Repository-Datei |
+| Früheres Dokumentationslabel | Aktuelle Repository-Datei |
 |---|---|
 | `video_processor_core.py` | `autopub.py` |
 | `video_processing_client.py` | `process_video.py` |
@@ -317,10 +374,10 @@ Frühere Dokumentation nutzte umbenannte Komponentenbezeichnungen. Die aktuellen
 | `file_sync_service.sh` | `autopub_sync.sh` |
 | `file_watcher_service.sh` | `monitor_autopublish.sh` |
 
-Zur Bequemlichkeit, wenn du `cd autopub_monitor` ausführst, entsprechen diese Legacy-Befehlsformen aus älteren Docs:
+Zur Erleichterung gilt für die Nutzung im Verzeichnis `cd autopub_monitor` die Äquivalenz zu älteren Dokumentationsbefehlen (pfadabhängig):
 
 ```bash
-# Older docs style (equivalent location-dependent commands)
+# Ältere Dokumentations-Form (äquivalente, pfadabhängige Befehle)
 ./autopub_monitor_tmux_session.sh start
 ./autopub_monitor_tmux_session.sh stop
 ./queue_file_utility.sh "pattern_to_match"
@@ -329,56 +386,59 @@ python autopub.py --pub-xhs --pub-bilibili --path "/path/to/video.mp4"
 python autopub.py --use-cache --use-translation-cache --path "/path/to/video.mp4" -v
 ```
 
-## Fehlerbehebung
+## 🛠️ Fehlerbehebung
 
-| Symptom | Zu prüfen |
+| Symptom | Prüfen Sie |
 |---|---|
-| `Miniconda not found at ~/miniconda3` | Miniconda installieren oder `CONDA_DIR` in `autopub.config` aktualisieren. |
-| `inotifywait: command not found` | `inotify-tools` installieren. |
-| `ffprobe`/`ffmpeg`-Fehler | `ffmpeg` installieren; Integrität der Eingabedatei prüfen. |
-| Videos werden wiederholt nicht in die Queue aufgenommen | `checked_list.txt`, `temp_queue.txt` und Logs von `monitor_autopublish.sh` prüfen. |
-| Queue hängt oder Race-Condition-Sorgen | `queue.lock`, `queue_list.txt` und aktive Prozesse mit `flock` prüfen. |
-| API-Upload/Verarbeitung/Veröffentlichung-Fehler | `APP_API_BASE_URL` und Endpoint-Pfade in `autopub.config` verifizieren. |
-| tmux-Service startet nicht | Prüfen, ob `tmux has-session` funktioniert und Skript-Ausführungsrechte gesetzt sind. |
+| `Miniconda not found at ~/miniconda3` | Installieren Sie Miniconda oder passen Sie `CONDA_DIR` in `autopub.config` an. |
+| `inotifywait: command not found` | Installieren Sie `inotify-tools`. |
+| `ffprobe`/`ffmpeg`-Fehler | Installieren Sie `ffmpeg`; prüfen Sie die Integrität der Eingabedatei. |
+| Videos werden wiederholt nicht gequeued | Prüfen Sie `checked_list.txt`, `temp_queue.txt` und Logdateien von `monitor_autopublish.sh`. |
+| Queue hängt oder Race-Bedingungen | Prüfen Sie `queue.lock`, `queue_list.txt` und aktive Prozesse mit `flock`. |
+| API-Upload/Processing/Publish-Fehler | Verifizieren Sie `APP_API_BASE_URL` und die Endpoint-Pfade in `autopub.config`. |
+| tmux-Service startet nicht | Prüfen Sie, ob `tmux has-session` funktioniert, und setzen Sie Skriptausführungsrechte korrekt. |
 
-## Roadmap
+## 🗺️ Roadmap
 
-- Gepinntes Abhängigkeitsmanagement hinzufügen (`requirements.txt` oder `pyproject.toml`).
-- CI-Prüfungen für Shell/Python-Linting und grundlegende Integrationstests hinzufügen.
-- Dokumentation für API-Vertrag und Deployment-Annahmen ergänzen.
-- `i18n/` um gepflegte übersetzte READMEs erweitern.
-- Beobachtbarkeit verbessern (strukturierte Logs und Health-Checks).
+- Pinnen von Abhängigkeitsverwaltung (`requirements.txt` oder `pyproject.toml`) hinzufügen.
+- CI-Prüfungen für Shell-/Python-Linting und Basistests hinzufügen.
+- Dokumentation zum API-Vertrag und zu Bereitstellungsannahmen ergänzen.
+- `i18n/` mit gepflegten übersetzten READMEs erweitern.
+- Beobachtbarkeit verbessern (strukturierte Logs und Health Checks).
 
-## Mitwirken
+## 🤝 Mitwirken
 
 Beiträge sind willkommen.
 
 Empfohlener Workflow:
 
 1. Fork erstellen und Feature-Branch anlegen.
-2. Änderungen klein und fokussiert halten (Skript- + Doku-Updates gemeinsam).
-3. In einer Linux-Umgebung mit erforderlichen System-Tools validieren.
-4. Pull Request mit klaren Reproduktions-/Testhinweisen einreichen.
+2. Änderungen klein und fokussiert halten (Skript + Docs zusammen).
+3. In einer Linux-Umgebung mit benötigten Systemwerkzeugen validieren.
+4. Einen Pull Request mit klaren Reproduktions- und Testhinweisen einreichen.
 
-Wenn sich Verhalten ändert, aktualisiere beide:
+Wenn sich Verhalten ändert, beide Dateien aktualisieren:
 
 - `README.md`
 - `PROJECT_STRUCTURE.md` und/oder `autopub_monitor/README.md`
 
-## Support und Sponsoring
+## ❤️ Support
 
-- GitHub Sponsors: https://github.com/sponsors/lachlanchen
-- Website: https://lazying.art
-- Community-Chat: https://chat.lazying.art
-- Ideen-Hub: https://onlyideas.art
+| Donate | PayPal | Stripe |
+| --- | --- | --- |
+| [![Donate](https://camo.githubusercontent.com/24a4914f0b42c6f435f9e101621f1e52535b02c225764b2f6cc99416926004b7/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f446f6e6174652d4c617a79696e674172742d3045413545393f7374796c653d666f722d7468652d6261646765266c6f676f3d6b6f2d6669266c6f676f436f6c6f723d7768697465)](https://chat.lazying.art/donate) | [![PayPal](https://camo.githubusercontent.com/d0f57e8b016517a4b06961b24d0ca87d62fdba16e18bbdb6aba28e978dc0ea21/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f50617950616c2d526f6e677a686f754368656e2d3030343537433f7374796c653d666f722d7468652d6261646765266c6f676f3d70617970616c266c6f676f436f6c6f723d7768697465)](https://paypal.me/RongzhouChen) | [![Stripe](https://camo.githubusercontent.com/1152dfe04b6943afe3a8d2953676749603fb9f95e24088c92c97a01a897b4942/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f5374726970652d446f6e6174652d3633354246463f7374796c653d666f722d7468652d6261646765266c6f676f3d737472697065266c6f676f436f6c6f723d7768697465)](https://buy.stripe.com/aFadR8gIaflgfQV6T4fw400) |
 
-(Aus `.github/FUNDING.yml`)
+## 📬 Kontakt
 
-## Danksagung
+Bei Fragen, Fehlerberichten und Funktionswünschen:
 
-- Aufgebaut auf Linux-nativen Tools (`tmux`, `inotify`, `rsync`, `ffmpeg`) für zuverlässige, langlaufende Automatisierung.
-- Danke an Mitwirkende und Nutzer für die Unterstützung kontinuierlicher Verbesserungen.
+- Öffnen Sie ein Issue unter [github.com/lachlanchen/AutoPubMonitor/issues](https://github.com/lachlanchen/AutoPubMonitor/issues)
 
-## Lizenz
+## 🙌 Danksagung
 
-Apache License 2.0 - Siehe [LICENSE](../LICENSE) für Details.
+- Aufbauend auf Linux-nativem Tooling (`tmux`, `inotify`, `rsync`, `ffmpeg`) für robuste, langfristige Automatisierung.
+- Dank an Mitwirkende und Nutzer, die die kontinuierliche Weiterentwicklung unterstützen.
+
+## 📄 Lizenz
+
+Apache License 2.0 - siehe [LICENSE](../LICENSE) für Details.

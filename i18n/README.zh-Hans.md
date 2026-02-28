@@ -1,43 +1,87 @@
 [English](../README.md) · [العربية](README.ar.md) · [Español](README.es.md) · [Français](README.fr.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Tiếng Việt](README.vi.md) · [中文 (简体)](README.zh-Hans.md) · [中文（繁體）](README.zh-Hant.md) · [Deutsch](README.de.md) · [Русский](README.ru.md)
 
 
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/lachlanchen/lachlanchen/main/logos/banner.png" alt="LazyingArt banner" />
-</p>
+[![LazyingArt banner](https://github.com/lachlanchen/lachlanchen/raw/main/figs/banner.png)](https://github.com/lachlanchen/lachlanchen/blob/main/figs/banner.png)
 
 # AutoPubMonitor
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](../LICENSE)
-[![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey)](#前置要求)
-[![Python](https://img.shields.io/badge/python-3.8%2B-blue)](#前置要求)
-[![Service](https://img.shields.io/badge/runtime-tmux%20%2B%20systemd-2ea44f)](#使用)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey)](#prerequisites)
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue)](#prerequisites)
+[![Service](https://img.shields.io/badge/runtime-tmux%20%2B%20systemd-2ea44f)](#usage)
+[![Monitors](https://img.shields.io/badge/monitoring-inotifywait-0ea5e9)](#usage)
+[![Queueing](https://img.shields.io/badge/queue-flock-16a34a)](#system-components)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa)](https://github.com/sponsors/lachlanchen)
+[![Activity](https://img.shields.io/github/last-commit/lachlanchen/AutoPubMonitor?style=flat-square&label=last%20commit&color=1d76db)](https://github.com/lachlanchen/AutoPubMonitor/commits/main)
+[![Repo Size](https://img.shields.io/github/repo-size/lachlanchen/AutoPubMonitor?style=flat-square&color=0366d6)](https://github.com/lachlanchen/AutoPubMonitor)
+[![Issues](https://img.shields.io/github/issues/lachlanchen/AutoPubMonitor?style=flat-square)](https://github.com/lachlanchen/AutoPubMonitor/issues)
+[![Contributors](https://img.shields.io/github/contributors/lachlanchen/AutoPubMonitor?style=flat-square)](https://github.com/lachlanchen/AutoPubMonitor/graphs/contributors)
 
-一个用于监控、处理并发布视频内容到多个平台的自动化系统。
+> 用于监控、处理并将视频内容发布到多个平台的自动化系统。
 
-## 概览
-
-AutoPubMonitor 是一个面向 Linux 的视频处理与多平台发布自动化流水线。系统会监听新视频文件，并执行包括兼容性修复、可选增强、通过 API 的转录/翻译相关处理，以及将结果发布到已配置平台在内的流程。
-
-运行时由 Shell 工具编排（`tmux`、`inotifywait`、`rsync`、`flock`），配合 Python 处理客户端与 CSV/文本状态追踪。
-
-## 核心特性
-
-| 能力 | 说明 |
+| What to expect | Detail |
 |---|---|
-| 自动文件检测 | 监听目录中的新视频内容 |
-| 处理队列管理 | 以可控、串行的方式处理视频 |
-| 视频处理 | 检查时长、格式并预处理视频 |
-| 多平台发布 | 支持小红书、Bilibili、抖音、视频号、YouTube |
-| 缓存系统 | 通过缓存优化处理效率 |
-| 文件同步 | 处理系统间文件移动与同步 |
-| 集中配置 | 所有路径与设置统一在一个配置文件中 |
-| 易于安装 | 使用单个脚本完成整套系统安装 |
-| 视频兼容性修复 | 使用 FFmpeg 检查，并可选 HandBrakeCLI 兜底 |
-| 面向服务运行 | `tmux` 会话 + 可选 `systemd` 服务 |
+| 运行模型 | Linux-first 的自动化流程，使用 `tmux`、可选 `systemd`，并通过队列锁进行串行控制 |
+| 队列设计 | 文件监视器 → 队列 → worker 循环，具备持久化状态追踪 |
+| 可扩展性 | Shell 编排 + Python 发布客户端，支持平台适配器扩展 |
+| 核心入口 | `autopub_monitor_tmux_session.sh`, `autopub.sh`, `autopub.py` |
 
-## 仓库结构
+---
+
+## 🧭 Documentation Map
+
+| Section | Why it matters |
+|---|---|
+| [Project at a Glance](#project-at-a-glance) | 快速理解运行模型与目标 |
+| [Installation](#installation) | 从克隆到服务运行 |
+| [Configuration](#configuration) | 了解每个关键脚本级配置项 |
+| [Usage](#usage) | 启停、入队与处理流程 |
+| [System Components](#system-components) | 区分 shell 与 Python 的职责 |
+| [Troubleshooting](#troubleshooting) | 快速定位启动与队列问题 |
+| [Roadmap](#roadmap) | 查看近期平台与工具规划 |
+| [Contributing](#contributing) | 掌握安全的贡献方式 |
+
+## 🧭 Quick Start at a Glance
+
+| Goal | Command | Notes |
+|---|---|---|
+| Start monitoring pipeline | `./autopub_monitor/autopub_monitor_tmux_session.sh start` | 启动 watcher + 队列 + 同步 + manual pane |
+| Stop all services | `./autopub_monitor/autopub_monitor_tmux_session.sh stop` | 优雅停机并清理面板 |
+| Queue by pattern | `./autopub_monitor/queue_file_utility.sh "pattern"` | 将匹配文件加入处理队列 |
+| Process one file | `./autopub_monitor/autopub.sh "/path/to/video.mp4"` | 使用默认发布和处理配置 |
+
+## 🎯 Project at a Glance
+
+| Focus | Details |
+|---|---|
+| Runtime target | Linux, with `tmux` orchestration and optional `systemd` |
+| 队列模型 | 文件监视器 → 队列 → worker 脚本 → 发布流水线 |
+| 核心入口 | `autopub_monitor_tmux_session.sh`, `autopub.py`, `autopub.config` |
+| 状态追踪 | `queue_list.txt`, `queue.lock`, `processed.csv`, `videos_db.csv` |
+
+## 🔎 Overview
+
+AutoPubMonitor 是一个面向 Linux 的视频内容处理与多平台发布自动化流水线。系统监听新的视频文件，通过兼容性修复、可选增强、API 驱动的转录/翻译相关处理等步骤，并将结果发布到已配置的平台。
+
+运行时由 shell 协调（`tmux`, `inotifywait`, `rsync`, `flock`）驱动，并结合 Python 处理客户端与基于 CSV/文本的状态追踪。
+
+## ⚡ Key Features
+
+| Capability | Details |
+|---|---|
+| 自动文件检测 | 监听目录中新出现的视频内容 |
+| 处理队列管理 | 以可控、顺序化方式处理视频 |
+| 视频处理 | 检查时长与格式，并预处理视频 |
+| 多平台发布 | 支持 XiaoHongShu、Bilibili、Douyin、ShiPinHao 和 YouTube |
+| 缓存系统 | 通过缓存结果优化处理效率 |
+| 文件同步 | 处理不同系统/目录间的文件迁移 |
+| 集中化配置 | 全部路径与设置放在单一配置文件 |
+| 简易安装 | 单脚本完成整套系统安装 |
+| 视频兼容修复 | 使用 FFmpeg 校验，并在需要时回退到 HandBrakeCLI |
+| 服务化运行 | `tmux` 会话 + 可选 `systemd` 服务 |
+| 国际化文档 | 根目录语言切换与 `i18n/` 翻译 |
+
+## 🗂️ Repository Structure
 
 ```text
 autopub-monitor/
@@ -70,56 +114,56 @@ autopub-monitor/
     └── window_info_utility.py
 ```
 
-## 系统组件
+## System Components
 
-### 核心处理
+### Core Processing
 
-| 组件 | 角色 |
+| Component | Role |
 |---|---|
-| `autopub.py` | 主处理引擎，负责上传/处理/发布编排 |
-| `process_video.py` | 视频处理客户端，负责上传、处理与结果回收 |
+| `autopub.py` | 处理主引擎，统一协调上传、处理与发布 |
+| `process_video.py` | 用于上传、处理和结果处理的视频处理客户端 |
 | `video_utils.py` / `handbrake.py` | 上传前的兼容性检查与修复 |
 
-### 队列管理
+### Queue Management
 
-| 组件 | 角色 |
+| Component | Role |
 |---|---|
-| `process_queue.sh` | 使用 `flock` 锁和重试循环的队列消费者 |
-| `queue_file_utility.sh` | 按路径或文件名模式手动加入队列 |
+| `process_queue.sh` | `flock` 加锁消费队列并带重试循环 |
+| `queue_file_utility.sh` | 按路径或文件名模式手动入队 |
 
-### 服务管理
+### Service Management
 
-| 组件 | 角色 |
+| Component | Role |
 |---|---|
-| `autopub_monitor_tmux_session.sh` | 启动/停止多窗格 tmux 服务 |
-| `autopub.sh` | `autopub.py` 的 Conda/启动封装器 |
-| `autopub_sync.sh` | 从 Nutstore/坚果云路径同步文件 |
-| `monitor_autopublish.sh` | 用于新文件监听与入队的 `inotify` 监控器 |
+| `autopub_monitor_tmux_session.sh` | 启动/停止多面板 tmux 服务 |
+| `autopub.sh` | `autopub.py` 的 conda/bootstrap 包装脚本 |
+| `autopub_sync.sh` | 从远端/已同步源目录同步文件 |
+| `monitor_autopublish.sh` | `inotify` 文件观察器，负责监听新文件与入队 |
 
-### 实用工具
+### Utilities
 
-| 组件 | 角色 |
+| Component | Role |
 |---|---|
-| `window_info_utility.py` | 基于 `xdotool` 的活动窗口工具（可选） |
-| `autopub.config` | 中央配置文件 |
-| `install_autopub_monitor.sh` | 安装 + systemd 配置辅助脚本 |
+| `window_info_utility.py` | `xdotool` 活动窗口工具（可选） |
+| `autopub.config` | 集中化配置文件 |
+| `install_autopub_monitor.sh` | 安装与 systemd 的配置助手 |
 
-## 前置要求
+## Prerequisites
 
-| 依赖 | 说明 |
+| Requirement | Notes |
 |---|---|
-| 带 bash 的 Linux 环境 | 主要运行目标 |
-| Python 3.8+ | 安装脚本当前创建 Python 3.8 conda 环境 |
-| 位于 `${HOME}/miniconda3` 的 Miniconda | 脚本默认预期路径 |
-| `ffmpeg` / `ffprobe` | 视频校验/处理必需 |
+| Linux 环境与 bash | 主要运行目标 |
+| Python 3.8+ | 安装脚本当前会创建 Python 3.8 conda 环境 |
+| `${HOME}/miniconda3` 中的 Miniconda | 脚本默认期望的路径 |
+| `ffmpeg` / `ffprobe` | 视频校验与处理所需 |
 | `tmux` | 服务编排 |
 | `inotify-tools` | 文件事件监听（`inotifywait`） |
 | `rsync` | 目录/系统间同步 |
 | `python3-pip` | Python 包安装 |
-| 可选：`HandBrakeCLI` | 建议用于修复疑难视频 |
-| 可选：`xdotool` | `window_info_utility.py` 所需 |
+| 可选：`HandBrakeCLI` | 建议用于修复有问题的视频 |
+| 可选：`xdotool` | `window_info_utility.py` 需要 |
 
-仓库脚本使用的 Python 包包括：
+Python 包清单（仓库脚本中使用）：
 
 - `requests`
 - `requests_toolbelt`
@@ -127,11 +171,11 @@ autopub-monitor/
 - `tqdm`
 - `numpy`
 
-## 安装
+## Installation
 
-### 🚀 自动安装（脚本化）
+### 🚀 Automatic Installation (scripted)
 
-在仓库根目录执行：
+从仓库根目录执行：
 
 ```bash
 cd autopub_monitor
@@ -139,24 +183,24 @@ chmod +x install_autopub_monitor.sh
 ./install_autopub_monitor.sh
 ```
 
-安装脚本会：
+安装器会执行：
 
-- 安装 apt 依赖（`tmux`、`inotify-tools`、`ffmpeg`、`python3-pip`）
-- 创建/使用 conda 环境 `autopub-video`
-- 安装 Python 包（`requests`、`requests_toolbelt`、`selenium`）
+- 安装 apt 依赖（`tmux`, `inotify-tools`, `ffmpeg`, `python3-pip`）
+- 创建或使用 conda 环境 `autopub-video`
+- 安装 Python 包（`requests`, `requests_toolbelt`, `selenium`）
 - 创建运行目录与状态文件
 - 安装并启用 `autopub-monitor.service`
 
-### 🧩 启用/启动服务（如果安装器未启用）
+### 🧩 Service Enable/Start (if not already enabled by installer)
 
 ```bash
 sudo systemctl enable autopub-monitor.service
 sudo systemctl start autopub-monitor.service
 ```
 
-### 🛠️ 手动配置
+### 🛠️ Manual Setup
 
-1. 根据你的环境检查并修改 `autopub_monitor/autopub.config`。
+1. 检查并修改 `autopub_monitor/autopub.config` 以匹配你的运行环境。
 2. 创建并激活环境：
 
 ```bash
@@ -165,33 +209,36 @@ conda activate autopub-video
 pip install requests requests_toolbelt selenium tqdm numpy
 ```
 
-3. 赋予脚本可执行权限：
+3. 设置脚本为可执行：
 
 ```bash
 chmod +x autopub_monitor/*.sh
 ```
 
-## 配置
+> 假设：仓库运行态状态文件（如 `queue.lock`, `temp_queue.txt`, `checked_list.txt`）应已存在，或在启动/安装流程中创建。
 
-主配置文件：`autopub_monitor/autopub.config`
+## Configuration
 
-关键设置包括：
+主要配置文件：`autopub_monitor/autopub.config`
 
-- 数据目录：`AUTOPUBLISH_DIR`、`TRANSCRIPTION_DIR`、`PREPROCESSED_VIDEOS_DIR`
+关键配置项包括：
+
+- 数据目录：`AUTOPUBLISH_DIR`, `TRANSCRIPTION_DIR`, `PREPROCESSED_VIDEOS_DIR`
 - 同步源目录：`JIANGUOYUN_*`
-- 状态文件：`QUEUE_LIST`、`TEMP_QUEUE`、`CHECKED_LIST`、`VIDEOS_DB_PATH`、`PROCESSED_PATH`
-- 锁文件：`QUEUE_LOCK`、`AUTOPUB_LOCK`
-- API 设置：`USE_APP_API`、`APP_API_BASE_URL`、`UPLOAD_URL`、`PROCESS_URL`、`PUBLISH_URL`
-- Conda 设置：`CONDA_ENV`、`CONDA_DIR`、`CONDA_ACTIVATE`
+- 状态文件：`QUEUE_LIST`, `TEMP_QUEUE`, `CHECKED_LIST`, `VIDEOS_DB_PATH`, `PROCESSED_PATH`
+- 锁文件：`QUEUE_LOCK`, `AUTOPUB_LOCK`
+- API 设置：`USE_APP_API`, `APP_API_BASE_URL`, `UPLOAD_URL`, `PROCESS_URL`, `PUBLISH_URL`
+- Conda 配置：`CONDA_ENV`, `CONDA_DIR`, `CONDA_ACTIVATE`
 
 说明：
 
-- 默认配置目前优先使用 app API 模式（`USE_APP_API="true"`），并基于 `APP_API_BASE_URL` 构建各端点 URL。
-- 配置中仍保留了旧版端点，供参考。
+- 默认配置当前倾向 app API 模式（`USE_APP_API="true"`），并由 `APP_API_BASE_URL` 拼接端点 URL。
+- 历史端点仍保留在配置文件中供参考。
+- 队列和锁文件名在所有脚本一致引用的情况下，可低风险调整。
 
-## 使用
+## Usage
 
-### ▶️ 启动服务
+### ▶️ Start Services
 
 在仓库根目录执行：
 
@@ -199,50 +246,50 @@ chmod +x autopub_monitor/*.sh
 ./autopub_monitor/autopub_monitor_tmux_session.sh start
 ```
 
-将启动：
+该命令会启动：
 
 - 文件同步服务
-- 目录监听服务
+- 目录 watcher 服务
 - 队列处理服务
-- 手动命令窗格
+- 手动命令面板
 - 转录 rsync 会话（`am-transcription-sync`）
 
-### ⏹️ 停止服务
+### ⏹️ Stop Services
 
 ```bash
 ./autopub_monitor/autopub_monitor_tmux_session.sh stop
 ```
 
-### 📥 手动队列管理
+### 📥 Manual Queue Management
 
 ```bash
-# Add by pattern match
+# 按模式匹配添加
 ./autopub_monitor/queue_file_utility.sh "pattern_to_match"
 
-# Add by full path
+# 按完整路径添加
 ./autopub_monitor/queue_file_utility.sh "/full/path/to/video.mp4"
 
-# Add with auto-confirmation (no selection prompt)
+# 自动确认添加（不显示选择提示）
 ./autopub_monitor/queue_file_utility.sh -y "pattern_to_match"
 ```
 
-### 🎬 手动视频处理
+### 🎬 Manual Video Processing
 
 ```bash
-# Process a specific file using wrapper defaults
+# 使用 wrapper 默认参数处理单文件
 ./autopub_monitor/autopub.sh "/path/to/video.mp4"
 
-# Direct CLI with specific publish targets
+# 指定发布目标进行直接 CLI 运行
 python autopub_monitor/autopub.py --pub-xhs --pub-bilibili --path "/path/to/video.mp4"
 
-# Caching options + progress visualization
+# 缓存选项 + 进度可视化
 python autopub_monitor/autopub.py --use-cache --use-translation-cache --use-metadata-cache --path "/path/to/video.mp4" -v
 
-# Upload/process without publishing
+# 仅上传与处理，不发布
 python autopub_monitor/autopub.py --no-pub --path "/path/to/video.mp4"
 ```
 
-## CLI 选项（`autopub.py`）
+## CLI Options (`autopub.py`)
 
 ```text
 --pub-xhs
@@ -260,54 +307,64 @@ python autopub_monitor/autopub.py --no-pub --path "/path/to/video.mp4"
 -v, --verbose
 ```
 
-行为说明：
+Behavior note:
 
-- 在 app API 模式下（`USE_APP_API=true`），除非显式传入发布参数，否则默认不发布。
+- 在 app API 模式（`USE_APP_API=true`）下，若未显式传入发布参数，则默认不会发布。
 
-## 处理架构
+## 🎛️ Command Palette
 
-1. **文件检测**：`monitor_autopublish.sh` 监听 `close_write` / `moved_to` 事件。
-2. **队列**：有效文件通过 `flock` 追加到 `queue_list.txt`。
-3. **处理**：`process_queue.sh` 消费队列并调用 `autopub.sh`。
-4. **上传/处理/发布**：`autopub.py` 与 `process_video.py` 调用已配置 API 端点。
-5. **追踪**：已处理文件写入 `processed.csv`，已发现文件写入 `videos_db.csv`。
+| Area | Examples |
+|---|---|
+| Service controls | `autopub_monitor_tmux_session.sh start/stop` |
+| Queue operations | `queue_file_utility.sh`, `process_queue.sh` |
+| File sync/process | `autopub_sync.sh`, `autopub.sh`, `monitor_autopublish.sh` |
+| Python execution path | `autopub.py`, `process_video.py`, `video_utils.py` |
 
-## 实用示例
+## Processing Architecture
 
-### 示例 1：端到端守护进程模式 🧪
+1. **文件检测**：`monitor_autopublish.sh` 监听 `close_write`/`moved_to` 事件。
+2. **入队**：有效文件通过 `flock` 追加到 `queue_list.txt`。
+3. **处理**：`process_queue.sh` 消费队列条目并调用 `autopub.sh`。
+4. **上传/处理/发布**：`autopub.py` 与 `process_video.py` 调用配置好的 API 端点。
+5. **追踪**：处理后的文件写入 `processed.csv`，已发现文件写入 `videos_db.csv`。
+
+## Practical Examples
+
+### Example 1: End-to-end daemon mode 🧪
 
 ```bash
 ./autopub_monitor/autopub_monitor_tmux_session.sh start
 ```
 
-然后将视频放入或同步到你配置的源目录，并在 tmux 窗格中观察日志。
+然后将视频放入或同步到你的源目录，并在 tmux 面板中查看日志。
 
-### 示例 2：强制重跑匹配文件 🔁
+### Example 2: Force re-run matching files 🔁
 
 ```bash
 python autopub_monitor/autopub.py --force "keyword1,keyword2" --use-cache --use-translation-cache --use-metadata-cache -v
 ```
 
-### 示例 3：本地测试且不发布 🧷
+### Example 3: Local test without publish 🧷
 
 ```bash
 python autopub_monitor/autopub.py --no-pub --test --path "/path/to/video.mp4"
 ```
 
-## 开发说明
+## 🧠 Development Notes
 
-- 仓库根目录当前没有固定依赖清单（`requirements.txt` / `pyproject.toml`）。
-- 运行时强依赖 Linux Shell 工具与本地路径约定。
-- 当前脚本会动态加载 shell 配置（`autopub.config`）；请保持 shell 兼容的变量表达式。
-- 队列与锁语义依赖 `flock`；避免修改成会削弱队列原子更新的实现。
-- API 协议细节来自客户端代码推断；服务端实现不在本仓库内。
-- `i18n/` 目录已存在，本轮正在逐步补充多语言文档。
+- 仓库根目录未提供固定的依赖清单（`requirements.txt` / `pyproject.toml`）。
+- 运行时强依赖 Linux shell 工具和本地路径约定。
+- 当前脚本会动态读取 shell 配置（`autopub.config`）；请保持 shell 兼容变量表达式。
+- 队列和锁语义依赖 `flock`，避免引入破坏原子性队列更新的修改。
+- API 协议细节可从客户端代码推断；服务端实现位于仓库外部。
+- `i18n/` 目录存在，但该草稿周期内翻译文档尚未完全维护。
+- 处理产物文件（`queue_list.txt`, `temp_queue.txt` 等）通常在运行时生成或托管管理，环境间可能不同。
 
-## 旧名称兼容性（保留）
+## 🧱 Legacy Name Compatibility (Preserved)
 
-此前文档使用过重命名后的组件标签。当前仓库文件名如下表所示。
+先前文档使用了重命名后的组件标签。当前仓库文件名如下。
 
-| 旧文档标签 | 当前仓库文件 |
+| Earlier docs label | Current repository file |
 |---|---|
 | `video_processor_core.py` | `autopub.py` |
 | `video_processing_client.py` | `process_video.py` |
@@ -317,7 +374,7 @@ python autopub_monitor/autopub.py --no-pub --test --path "/path/to/video.mp4"
 | `file_sync_service.sh` | `autopub_sync.sh` |
 | `file_watcher_service.sh` | `monitor_autopublish.sh` |
 
-为方便起见，如果你先 `cd autopub_monitor`，旧文档中的这些命令形式可映射为：
+For convenience, if you `cd autopub_monitor`, these legacy-style command forms from older docs map to:
 
 ```bash
 # Older docs style (equivalent location-dependent commands)
@@ -329,56 +386,59 @@ python autopub.py --pub-xhs --pub-bilibili --path "/path/to/video.mp4"
 python autopub.py --use-cache --use-translation-cache --path "/path/to/video.mp4" -v
 ```
 
-## 故障排查
+## 🛠️ Troubleshooting
 
-| 症状 | 检查项 |
+| Symptom | What to check |
 |---|---|
-| `Miniconda not found at ~/miniconda3` | 安装 Miniconda，或在 `autopub.config` 中更新 `CONDA_DIR`。 |
+| `Miniconda not found at ~/miniconda3` | 安装 Miniconda，或更新 `autopub.config` 中的 `CONDA_DIR`。 |
 | `inotifywait: command not found` | 安装 `inotify-tools`。 |
-| `ffprobe`/`ffmpeg` 失败 | 安装 `ffmpeg`，并校验输入文件完整性。 |
-| 视频反复未入队 | 检查 `checked_list.txt`、`temp_queue.txt`，并查看 `monitor_autopublish.sh` 日志。 |
-| 队列卡住或存在竞争风险 | 检查 `queue.lock`、`queue_list.txt`，以及使用 `flock` 的活动进程。 |
-| API 上传/处理/发布错误 | 校验 `autopub.config` 中的 `APP_API_BASE_URL` 与端点路径。 |
-| tmux 服务无法启动 | 确认 `tmux has-session` 可用，且脚本具有可执行权限。 |
+| `ffprobe`/`ffmpeg` failures | 安装 `ffmpeg`，并校验输入文件完整性。 |
+| 视频反复未入队 | 检查 `checked_list.txt`、`temp_queue.txt` 与 `monitor_autopublish.sh` 的监控日志。 |
+| Queue stuck or race concerns | 检查 `queue.lock`、`queue_list.txt`，并结合 `flock` 查看活跃进程。 |
+| API upload/process/publish errors | 核对 `APP_API_BASE_URL`，以及 `autopub.config` 中的端点路径。 |
+| tmux service not starting | 确认 `tmux has-session` 可用，并且脚本有执行权限。 |
 
-## 路线图
+## 🗺️ Roadmap
 
 - 增加固定依赖管理（`requirements.txt` 或 `pyproject.toml`）。
-- 增加 Shell/Python lint 与基础集成测试的 CI 检查。
-- 增加 API 协议与部署前提文档。
-- 持续扩展并维护 `i18n/` 多语言 README。
-- 提升可观测性（结构化日志与健康检查）。
+- 新增 shell/Python 的 lint 与基础集成测试 CI。
+- 补充 API 合约与部署假设文档。
+- 扩展 `i18n/`，补齐维护中的翻译 README。
+- 改善可观测性（结构化日志与健康检查）。
 
-## 贡献
+## 🤝 Contributing
 
 欢迎贡献。
 
-建议流程：
+Recommended workflow:
 
 1. Fork 并创建功能分支。
-2. 保持改动小而聚焦（脚本与文档一并更新）。
-3. 在具备所需系统工具的 Linux 环境验证。
-4. 提交 Pull Request，并附清晰的复现/测试说明。
+2. 保持改动小且聚焦（脚本与文档一起更新）。
+3. 在安装必要系统工具的 Linux 环境中验证。
+4. 提交 Pull Request 时附上清晰的复现与测试说明。
 
-若行为发生变化，请同时更新：
+行为变更时，请同步更新：
 
 - `README.md`
 - `PROJECT_STRUCTURE.md` 和/或 `autopub_monitor/README.md`
 
-## 支持与赞助
+## ❤️ Support
 
-- GitHub Sponsors: https://github.com/sponsors/lachlanchen
-- Website: https://lazying.art
-- Community chat: https://chat.lazying.art
-- Ideas hub: https://onlyideas.art
+| Donate | PayPal | Stripe |
+| --- | --- | --- |
+| [![Donate](https://camo.githubusercontent.com/24a4914f0b42c6f435f9e101621f1e52535b02c225764b2f6cc99416926004b7/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f446f6e6174652d4c617a79696e674172742d3045413545393f7374796c653d666f722d7468652d6261646765266c6f676f3d6b6f2d6669266c6f676f436f6c6f723d7768697465)](https://chat.lazying.art/donate) | [![PayPal](https://camo.githubusercontent.com/d0f57e8b016517a4b06961b24d0ca87d62fdba16e18bbdb6aba28e978dc0ea21/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f50617950616c2d526f6e677a686f754368656e2d3030343537433f7374796c653d666f722d7468652d6261646765266c6f676f3d70617970616c266c6f676f436f6c6f723d7768697465)](https://paypal.me/RongzhouChen) | [![Stripe](https://camo.githubusercontent.com/1152dfe04b6943afe3a8d2953676749603fb9f95e24088c92c97a01a897b4942/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f5374726970652d446f6e6174652d3633354246463f7374796c653d666f722d7468652d6261646765266c6f676f3d737472697065266c6f676f436f6c6f723d7768697465)](https://buy.stripe.com/aFadR8gIaflgfQV6T4fw400) |
 
-（来自 `.github/FUNDING.yml`）
+## 📬 Contact
 
-## 致谢
+For questions, bug reports, and feature requests:
 
-- 基于 Linux 原生工具（`tmux`、`inotify`、`rsync`、`ffmpeg`）构建，以支持稳定的长时间自动化运行。
-- 感谢所有支持持续改进的贡献者与用户。
+- Open an issue at [github.com/lachlanchen/AutoPubMonitor/issues](https://github.com/lachlanchen/AutoPubMonitor/issues)
 
-## 许可证
+## 🙌 Acknowledgements
 
-Apache License 2.0 - 详见 [LICENSE](../LICENSE)。
+- Built around Linux-native tooling (`tmux`, `inotify`, `rsync`, `ffmpeg`) for reliable long-running automation.
+- Thanks to contributors and users supporting ongoing improvements.
+
+## 📄 License
+
+Apache License 2.0 - 详见 [LICENSE](LICENSE) 了解详情。
