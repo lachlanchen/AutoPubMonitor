@@ -189,6 +189,7 @@ The installer:
 - Creates/uses conda environment `autopub-video`
 - Installs Python packages (`requests`, `requests_toolbelt`, `selenium`)
 - Creates runtime directories and state files
+- Installs a mount-aware `autopub-monitor.service` that waits for `/home/${USER}`, `/home/${USER}/DiskMech`, and `/home/${USER}/AutoPublishDATA`
 - Installs and enables `autopub-monitor.service`
 
 ### 🧩 Service Enable/Start (if not already enabled by installer)
@@ -252,7 +253,27 @@ This starts:
 - Directory watcher service
 - Queue processing service
 - Manual command pane
-- Transcription rsync session (`am-transcription-sync`)
+- Transcription rsync session (`transcription-sync`)
+
+Operational notes:
+
+- The manual pane is intentionally staged only. It prepares the `autopub.py --force`
+  command and waits for Enter.
+- The `transcription-sync` session is also intentionally staged only. Its rsync
+  loop is typed into the shell and waits for Enter.
+- `autopub.config` currently selects the Conda env `autopub-video`.
+- Queue temp files already use `/dev/shm`, so queue/lock handling is not the
+  main disk writer. The steady filesystem churn comes mostly from
+  `autopub_sync.sh`'s `find` + `rsync` loop and repeated log appends.
+- Startup race note: `autopub_sync.sh` can copy a `*_COMPLETED` file into
+  `AUTOPUBLISH_DIR` before `monitor_autopublish.sh` has finished establishing
+  its `inotifywait` watch. In that case, the file is present locally but no
+  queue event is recorded, because the watcher only reacts to future
+  `close_write` and `moved_to` events and does not do an initial scan of
+  already-existing files.
+- Practical consequence: if a file appears during service startup and is missed,
+  renaming or recopying it after the watcher is live will trigger queueing and
+  processing.
 
 ### ⏹️ Stop Services
 

@@ -68,6 +68,12 @@ AutoPubMonitor is a comprehensive pipeline for video content processing and mult
    sudo systemctl start autopub-monitor.service
    ```
 
+The installer-generated `autopub-monitor.service` is mount-aware and waits for:
+
+- `/home/lachlan`
+- `/home/lachlan/DiskMech`
+- `/home/lachlan/AutoPublishDATA`
+
 ### Manual Setup
 
 1. Review and modify `autopub.config` for your environment.
@@ -97,7 +103,23 @@ This will start:
 - Directory monitoring service
 - File synchronization service
 - Queue processing service
-- Transcription sync service
+- Manual pane in the main `autopub-monitor` tmux session
+- Staged `transcription-sync` tmux session
+
+Important runtime behavior:
+
+- The manual pane is staged and waits for Enter. It does not auto-run the
+  `autopub.py --force` command.
+- The `transcription-sync` session is also staged and waits for Enter before
+  starting its rsync loop.
+- The configured Conda env is `autopub-video` from `autopub.config`.
+- Startup race note: `autopub_sync.sh` can copy a `*_COMPLETED` file into
+  `AUTOPUBLISH_DIR` before `monitor_autopublish.sh` has finished establishing
+  its `inotifywait` watch. The watcher only reacts to later `close_write` and
+  `moved_to` events and does not do an initial scan, so a file that lands during
+  startup can be missed and never reach `queue_list.txt`.
+- Practical consequence: if that happens, renaming or recopying the file after
+  the watcher is live will generate a fresh event and the file will be queued.
 
 ### Stopping Services
 
@@ -146,6 +168,12 @@ The central configuration file `autopub.config` contains all paths and settings 
 - Conda environment settings
 
 Modify this file to adapt the system to your environment.
+
+## Operational Notes
+
+- Queue temp files use `/dev/shm`, so queue locking itself is lightweight.
+- The heavier steady filesystem activity comes from `autopub_sync.sh`
+  repeatedly scanning and `rsync`ing, plus log appends in the processing loop.
 
 ## Architecture
 
