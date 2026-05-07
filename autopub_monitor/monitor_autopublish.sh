@@ -38,6 +38,14 @@ queue_file() {
     local file_path=$1
     local sleep_time=$(( RANDOM % 30 + 1 ))  # Random sleep between 1 and 30 seconds
     sleep $sleep_time
+    if [ ! -f "$file_path" ]; then
+        echo_with_timestamp "File $file_path disappeared before queueing. Skipping stale event."
+        return
+    fi
+    if ! ffprobe -v error -show_entries format=filename -of default=noprint_wrappers=1:nokey=1 "$file_path" > /dev/null; then
+        echo_with_timestamp "File $file_path is no longer a valid video before queueing. Skipping."
+        return
+    fi
     echo_with_timestamp "File $file_path passed checks after a random sleep of $sleep_time seconds. Adding to queue."
 
     # Lock the queue list, write the file path, and unlock

@@ -33,8 +33,13 @@ done
 # Create a lock file
 touch "${AUTOPUB_LOCK}"
 
-# Ensure the lock file is removed when the script finishes
-trap 'rm -f "${AUTOPUB_LOCK}"; exit' INT TERM EXIT
+# Ensure the lock file is removed when the script finishes. Interrupts must
+# stay failures so process_queue.sh does not drop an unfinished item.
+cleanup_lock() {
+    rm -f "${AUTOPUB_LOCK}"
+}
+trap cleanup_lock EXIT
+trap 'cleanup_lock; exit 130' INT TERM
 
 echo_with_timestamp "Executing autopub.py..."
 if [ -n "${full_path}" ]; then
@@ -42,10 +47,17 @@ if [ -n "${full_path}" ]; then
     echo_with_timestamp "Processing file: ${full_path}..."
     sleep 10
     python "${AUTOPUB_PY}" --use-cache --use-metadata-cache --use-translation-cache --path "${full_path}" > "${AUTOPUB_LOGS_DIR}/autopub_$(date '+%Y-%m-%d_%H-%M-%S').log" 2>&1
+    result=$?
 else
     sleep 10
     # If no path is provided, run the script without the --path argument
     python "${AUTOPUB_PY}" --use-cache --use-metadata-cache --use-translation-cache > "${AUTOPUB_LOGS_DIR}/autopub_$(date '+%Y-%m-%d_%H-%M-%S').log" 2>&1
+    result=$?
+fi
+
+if [ "${result}" -ne 0 ]; then
+    echo_with_timestamp "autopub.py failed for file: ${full_path} with exit code ${result}."
+    exit "${result}"
 fi
 
 echo_with_timestamp "Finished executing autopub.py with file: ${full_path}..."

@@ -36,6 +36,24 @@ while true; do
     echo_with_timestamp "Variable full_path after lock: $full_path"
     
     if [ -n "$full_path" ]; then
+        if [ ! -f "$full_path" ]; then
+            echo_with_timestamp "Queued file no longer exists. Removing stale queue entry: ${full_path}"
+            {
+                flock -x 200
+                first_line=$(head -n 1 "$QUEUE_LIST")
+                if [ "$first_line" = "$full_path" ]; then
+                    sed -i '1d' "$QUEUE_LIST"
+                    echo_with_timestamp "Removed stale queue entry: $full_path"
+                else
+                    grep -Fxv -- "$full_path" "$QUEUE_LIST" > "${QUEUE_LIST}.tmp" || true
+                    mv "${QUEUE_LIST}.tmp" "$QUEUE_LIST"
+                    echo_with_timestamp "Removed stale queue entry from queue list: $full_path"
+                fi
+            } 200>"$QUEUE_LOCK"
+            rm "$TMP_FILE"
+            continue
+        fi
+
         echo_with_timestamp "Processing: ${full_path}"
         bash "$AUTOPUB_SH" "${full_path}" &>> "${AUTOPUB_LOGS_DIR}/autopub.log"
         result=$?
